@@ -1,0 +1,25 @@
+name: Post-merge
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  tag-check:
+    name: Remind if version bump needed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if version changed
+        run: |
+          OLD=$(git show HEAD~1:pyproject.toml | grep '^version' | head -1)
+          NEW=$(grep '^version' pyproject.toml | head -1)
+          if [ "$OLD" = "$NEW" ]; then
+            echo "⚠️  Version in pyproject.toml unchanged after merge to main."
+            echo "    If this was a feature/fix PR, consider bumping the version and tagging."
+          else
+            echo "✅ Version changed: $OLD → $NEW"
+          fi

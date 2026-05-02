@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .engine import redact_file, report_to_json, scan_file
+from .engine import redact_file, report_to_json, scan_file, scan_text
 from .policy import load_policy
 
 
@@ -44,6 +44,26 @@ def _tool_result(text: str, is_error: bool = False, structured: dict[str, Any] |
 
 def _tools_list() -> list[dict[str, Any]]:
     return [
+        {
+            "name": "contextduty_scan_text",
+            "title": "ContextDuty Scan Text",
+            "description": (
+                "Scan a raw text string for sensitive data (emails, API keys, tokens, etc.) "
+                "before it is sent to an LLM. Returns findings and the redacted version of the text. "
+                "Use this to check prompt content, log snippets, or any in-memory string."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "The text content to scan and redact."},
+                    "policyPath": {
+                        "type": "string",
+                        "description": "Optional policy JSON path (.contextduty.json).",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
         {
             "name": "contextduty_scan",
             "title": "ContextDuty Scan",
@@ -93,6 +113,21 @@ def _handle_tools_call(params: dict[str, Any]) -> dict[str, Any]:
     name = params.get("name")
     args = params.get("arguments") or {}
 
+    if name == "contextduty_scan_text":
+        text = args.get("text")
+        if not isinstance(text, str):
+            raise ValueError("Missing required argument: text")
+        policy = _load_policy(args.get("policyPath"))
+        result = scan_text(text, policy)
+        structured = {
+            "findings_count": result.scan.findings_count,
+            "detector_counts": result.scan.detector_counts,
+            "blocked": result.scan.blocked,
+            "redacted_text": result.redacted_text,
+        }
+        report = json.dumps(structured, indent=2)
+        return _tool_result(report, is_error=result.scan.blocked, structured=structured)
+
     if name == "contextduty_scan":
         path = args.get("path")
         if not isinstance(path, str) or not path:
@@ -137,14 +172,12 @@ def run_stdio() -> None:
         try:
             msg = json.loads(raw)
         except Exception:
-            # No id to respond to; ignore malformed lines.
             continue
 
         _id = msg.get("id")
         method = msg.get("method")
         params = msg.get("params") or {}
 
-        # Notifications have no id; ignore safely.
         if _id is None:
             continue
 
@@ -169,7 +202,6 @@ def run_stdio() -> None:
                 except KeyError as e:
                     _send(_err(_id, -32602, str(e)))
                 except Exception as e:
-                    # Tool execution errors should be returned as a tool result.
                     _send(_ok(_id, _tool_result(f"{type(e).__name__}: {e}", is_error=True)))
                 continue
 
@@ -184,4 +216,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

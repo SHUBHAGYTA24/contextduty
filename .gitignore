@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Local policy and demo artifacts
+.contextduty.json
+*.demo.json
+demo/live/*.json
+demo/live/*-clean.txt
+demo/live/*-report.json
+
+# Local outputs
+clean.txt
+report.json
+redact-report.json
+demo-clean.txt
+demo-report.json
+demo-redact-report.json
+
+# macOS / editor noise
+.DS_Store
+.idea/
+.vscode/

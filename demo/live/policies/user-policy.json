@@ -1,0 +1,6 @@
+{
+  "extends": "team-policy.json",
+  "custom_detectors": {
+    "employee_id": "\\bEMP-[0-9]{6}\\b"
+  }
+}

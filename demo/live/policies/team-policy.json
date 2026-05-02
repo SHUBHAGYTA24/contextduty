@@ -1,0 +1,5 @@
+{
+  "extends": "org-baseline.json",
+  "mode": "block",
+  "detectors": ["bearer_token"]
+}

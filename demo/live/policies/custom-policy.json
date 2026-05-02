@@ -1,0 +1,8 @@
+{
+  "mode": "redact",
+  "detectors": ["email"],
+  "custom_detectors": {
+    "employee_id": "\\bEMP-[0-9]{6}\\b",
+    "internal_ticket": "\\bTICKET-[A-Z]{3}-[0-9]{4}\\b"
+  }
+}

@@ -1,0 +1,6 @@
+Customer: jane.doe@example.com
+Token: Bearer sk_test_1234567890ABCDEFGHIJ
+Employee ID: EMP-123456
+Internal Ticket: TICKET-ABC-1234
+AWS: AKIA1234567890ABCDEF
+Phone: +1 415-555-1212

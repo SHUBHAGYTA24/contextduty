@@ -1,0 +1,7 @@
+{
+  "mode": "warn",
+  "detectors": ["email", "aws_key", "phone"],
+  "custom_detectors": {
+    "internal_ticket": "\\bTICKET-[A-Z]{3}-[0-9]{4}\\b"
+  }
+}

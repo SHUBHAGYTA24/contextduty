@@ -1,0 +1,5 @@
+{
+  "mode": "redact",
+  "detectors": ["email", "unknown_detector_for_demo"],
+  "custom_detectors": {}
+}

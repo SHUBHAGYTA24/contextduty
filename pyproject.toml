@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "contextduty"
+version = "0.1.0"
+description = "Policy-driven context security CLI for AI workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "ContextDuty Contributors" }
+]
+dependencies = []
+
+[project.scripts]
+contextduty = "contextduty.cli:main"
+contextduty-mcp = "contextduty.mcp_server:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,12 @@
+{
+  "_comment": "ContextDuty HIPAA baseline policy. Extend this in your team policy file.",
+  "mode": "block",
+  "detectors": ["email", "phone"],
+  "custom_detectors": {
+    "ssn": "\\b(?!000|666|9\\d{2})\\d{3}-(?!00)\\d{2}-(?!0000)\\d{4}\\b",
+    "npi": "\\b\\d{10}\\b",
+    "dea_number": "\\b[A-Z]{2}\\d{7}\\b",
+    "icd10_code": "\\b[A-TV-Z][0-9][0-9A-Z]\\.?[0-9A-Z]{0,4}\\b",
+    "mrn": "\\bMRN[-:]?\\s*\\d{6,10}\\b"
+  }
+}

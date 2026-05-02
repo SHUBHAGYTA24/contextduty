@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Smoke test — init
+        run: contextduty init --path /tmp/test-policy.json
+
+      - name: Smoke test — scan sample
+        run: contextduty scan sample.txt --policy /tmp/test-policy.json
+
+      - name: Smoke test — redact sample
+        run: contextduty redact --in sample.txt --out /tmp/clean.txt --policy /tmp/test-policy.json
+
+      - name: Smoke test — policy validate
+        run: contextduty policy validate --policy /tmp/test-policy.json
+
+      - name: Verify SOC2 policy is valid JSON
+        run: python -c "import json; json.load(open('policies/soc2-baseline.json'))"
+
+      - name: Verify HIPAA policy is valid JSON
+        run: python -c "import json; json.load(open('policies/hipaa-baseline.json'))"

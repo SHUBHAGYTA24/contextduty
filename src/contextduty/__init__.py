@@ -1,4 +1,3 @@
-"""ContextDuty package."""
+"""ContextDuty — policy-driven context firewall for AI workflows."""
 
-__all__ = ["__version__"]
 __version__ = "0.1.0"

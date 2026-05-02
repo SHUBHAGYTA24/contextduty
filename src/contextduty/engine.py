@@ -80,6 +80,42 @@ def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResu
     return ScanResult(findings_count=findings_count, detector_counts=detector_counts, blocked=blocked)
 
 
+@dataclass(frozen=True)
+class ScanTextResult:
+    """Result of scanning and redacting an in-memory text string."""
+
+    scan: ScanResult
+    redacted_text: str
+
+
+def scan_text(text: str, policy: Policy) -> ScanTextResult:
+    """Scan and redact an in-memory string without touching the filesystem.
+
+    This is the primary entry point for MCP tool use — the LLM passes raw
+    text and receives back a findings report plus the redacted version.
+    """
+    detectors = _active_detectors(policy)
+    detector_counts: dict[str, int] = {}
+    findings_count = 0
+    redacted = text
+
+    for line in text.splitlines(keepends=True):
+        findings = _scan_line(line, detectors)
+        findings_count += len(findings)
+        for finding in findings:
+            detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
+            if policy.mode == "redact":
+                redacted = redacted.replace(finding.value, stable_mask(finding.detector, finding.value))
+
+    blocked = findings_count > 0 and policy.mode == "block"
+    scan_result = ScanResult(
+        findings_count=findings_count,
+        detector_counts=detector_counts,
+        blocked=blocked,
+    )
+    return ScanTextResult(scan=scan_result, redacted_text=redacted if policy.mode == "redact" else text)
+
+
 def report_to_json(result: ScanResult) -> str:
     payload = {
         "findings_count": result.findings_count,

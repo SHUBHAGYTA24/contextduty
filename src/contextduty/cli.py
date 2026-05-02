@@ -12,7 +12,10 @@ from .policy import load_policy, unknown_detector_names, write_default_policy
 
 
 def _parser() -> argparse.ArgumentParser:
+    from . import __version__
+
     parser = argparse.ArgumentParser(prog="contextduty", description="Protect AI context with policy checks.")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Create default policy file.")

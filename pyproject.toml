@@ -5,14 +5,39 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "contextduty"
 version = "0.1.0"
-description = "Policy-driven context security CLI for AI workflows"
+description = "Policy-driven context firewall for AI workflows — scan and redact sensitive data before prompts, logs, or traces leave your environment."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "ContextDuty Contributors" }
 ]
+keywords = [
+  "security", "pii", "redaction", "ai", "llm", "mcp",
+  "prompt", "privacy", "devsecops", "secrets"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Logging",
+]
 dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/SHUBHAGYTA24/contextduty"
+Repository = "https://github.com/SHUBHAGYTA24/contextduty"
+"Bug Tracker" = "https://github.com/SHUBHAGYTA24/contextduty/issues"
+Changelog = "https://github.com/SHUBHAGYTA24/contextduty/blob/main/CHANGELOG.md"
 
 [project.scripts]
 contextduty = "contextduty.cli:main"
@@ -23,3 +48,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

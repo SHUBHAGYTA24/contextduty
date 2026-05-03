@@ -14,20 +14,14 @@ class Detector:
 
 
 DETECTORS: list[Detector] = [
-    Detector(
-        "email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-    ),
+    Detector("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     Detector(
         "phone",
-        re.compile(
-            r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b"
-        ),
+        re.compile(r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b"),
     ),
     Detector("api_key", re.compile(r"\b(?:sk|rk|pk)_[A-Za-z0-9_]{16,}\b")),
     Detector("aws_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
-    Detector(
-        "bearer_token", re.compile(r"\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b", re.IGNORECASE)
-    ),
+    Detector("bearer_token", re.compile(r"\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b", re.IGNORECASE)),
 ]
 
 

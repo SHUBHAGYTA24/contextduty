@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from .detectors import DETECTORS
 
@@ -121,8 +123,13 @@ def _resolve_policy_config(path: Path, seen: set[Path] | None = None) -> dict[st
     }
 
     for parent_ref in parent_refs:
-        parent_path = (resolved_path.parent / parent_ref).resolve()
-        parent_config = _resolve_policy_config(parent_path, seen)
+        if _is_url(parent_ref):
+            parent_config = _resolve_policy_config_with_urls(
+                parent_ref, resolved_path.parent, seen, set()
+            )
+        else:
+            parent_path = (resolved_path.parent / parent_ref).resolve()
+            parent_config = _resolve_policy_config(parent_path, seen)
         merged = _merge_policy_configs(merged, parent_config)
 
     local_config = dict(config)
@@ -230,3 +237,92 @@ def unknown_detector_names(policy: Policy) -> list[str]:
     built_in_names = {detector.name for detector in DETECTORS}
     allowed = built_in_names | set(policy.custom_detectors.keys())
     return sorted(name for name in policy.detectors if name not in allowed)
+
+
+# ---------------------------------------------------------------------------
+# URL-based policy fetching
+# ---------------------------------------------------------------------------
+
+
+def _is_url(ref: str) -> bool:
+    parsed = urlparse(ref)
+    return parsed.scheme in ("http", "https")
+
+
+def _fetch_url_policy(url: str, timeout: int = 10) -> dict[str, Any]:
+    """Fetch a policy JSON from a URL (HTTPS only in production).
+
+    This enables centralized policy distribution — a security team hosts
+    one canonical URL and all developer machines extend it:
+
+        { "extends": "https://policy.corp.com/soc2-baseline.json" }
+
+    The fetch uses stdlib urllib — no third-party dependencies.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"policy URL must use http or https scheme: {url}")
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": f"contextduty/{_get_version()}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            raw = resp.read().decode("utf-8")
+    except Exception as exc:
+        raise ValueError(f"failed to fetch policy from {url}: {exc}") from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"policy at {url} is not valid JSON: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ValueError(f"policy at {url} must contain a JSON object")
+    return data
+
+
+def _get_version() -> str:
+    try:
+        from . import __version__
+
+        return __version__
+    except Exception:
+        return "0.0.0"
+
+
+def _resolve_policy_config_with_urls(
+    ref: str,
+    base_path: Path,
+    seen_files: set[Path],
+    seen_urls: set[str],
+) -> dict[str, Any]:
+    """Resolve a policy ref that may be either a file path or a URL."""
+    if _is_url(ref):
+        if ref in seen_urls:
+            raise ValueError(f"policy extends cycle detected at URL: {ref}")
+        seen_urls.add(ref)
+        config = _fetch_url_policy(ref)
+        parent_refs = _normalize_extends(config.get("extends"))
+        merged: dict[str, Any] = {
+            "mode": DEFAULT_POLICY["mode"],
+            "detectors": list(DEFAULT_POLICY["detectors"]),
+            "custom_detectors": dict(DEFAULT_POLICY["custom_detectors"]),
+            "detector_modes": {},
+            "allow_patterns": {},
+        }
+        for parent_ref in parent_refs:
+            parent_config = _resolve_policy_config_with_urls(
+                parent_ref, base_path, seen_files, seen_urls
+            )
+            merged = _merge_policy_configs(merged, parent_config)
+        local_config = dict(config)
+        local_config.pop("extends", None)
+        merged = _merge_policy_configs(merged, local_config)
+        seen_urls.discard(ref)
+        return merged
+    else:
+        # Relative file path — resolve relative to base_path
+        parent_path = (base_path / ref).resolve()
+        return _resolve_policy_config(parent_path, seen_files)

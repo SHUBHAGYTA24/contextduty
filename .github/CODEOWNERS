@@ -1,0 +1,17 @@
+# CODEOWNERS
+# These owners are automatically requested for review on every PR.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @SHUBHAGYTA24
+
+# Detector patterns and policy logic — highest security impact
+src/contextduty/detectors.py @SHUBHAGYTA24
+src/contextduty/engine.py @SHUBHAGYTA24
+src/contextduty/policy.py @SHUBHAGYTA24
+
+# Compliance policy packs
+policies/ @SHUBHAGYTA24
+
+# CI and release workflows
+.github/workflows/ @SHUBHAGYTA24

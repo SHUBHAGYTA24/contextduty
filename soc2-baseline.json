@@ -1,6 +1,0 @@
-{
-  "_comment": "ContextDuty SOC 2 baseline policy. Extend this in your team policy file.",
-  "mode": "block",
-  "detectors": ["email", "phone", "api_key", "aws_key", "bearer_token"],
-  "custom_detectors": {}
-}

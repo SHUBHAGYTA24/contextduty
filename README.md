@@ -10,6 +10,10 @@
 
 ---
 
+> **Status: early alpha — built over a weekend, rough edges expected.**
+> Works end-to-end. Not yet battle-tested in production. Ideas, issues,
+> and PRs very welcome.
+
 ## Why ContextDuty
 
 AI coding assistants and agent workflows are spreading fast. So is accidental data leakage — API keys, emails, and PII flowing into prompts, logs, and traces that may be stored or sent to third-party services.

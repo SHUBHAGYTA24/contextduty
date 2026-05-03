@@ -1,6 +1,0 @@
-# All files require review from the repo owner
-* @SHUBHAGYTA24
-
-# Policy packs need extra scrutiny
-policies/ @SHUBHAGYTA24
-src/contextduty/detectors.py @SHUBHAGYTA24

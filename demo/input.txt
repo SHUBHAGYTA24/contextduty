@@ -1,0 +1,11 @@
+# Sample context file — the kind of mixed data that ends up in AI prompts
+# ContextDuty detects and redacts these before they leave your machine
+
+[2026-05-03 09:14] Reminder job started
+[2026-05-03 09:14] Sending to: meera.sharma@apollohospitals.com
+[2026-05-03 09:14] Auth: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcm9kIn0.abc123
+[2026-05-03 09:14] AWS region: us-east-1, key: AKIA1234567890ABCDEF
+[2026-05-03 09:14] Support contact: +1 415-555-1212
+[2026-05-03 09:14] API key in config: sk_live_9Xk2mPqRvL8nJwTdYcBe3F
+[2026-05-03 09:14] SMTP error: connection timeout on port 587
+[2026-05-03 09:14] Retrying in 30s...

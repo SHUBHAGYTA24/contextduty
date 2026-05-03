@@ -1,4 +1,0 @@
-Customer email: jane.doe@example.com
-Auth token: Bearer sk_test_1234567890ABCDEFGHIJ
-AWS key sample: AKIA1234567890ABCDEF
-Phone: +1 415-555-1212

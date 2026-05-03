@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from contextduty.policy import load_policy, unknown_detector_names
 
-
 # ---------------------------------------------------------------------------
 # Default policy
 # ---------------------------------------------------------------------------
+
 
 def test_default_policy_loads():
     policy = load_policy(None)
@@ -22,6 +23,7 @@ def test_default_policy_loads():
 # ---------------------------------------------------------------------------
 # Policy from file
 # ---------------------------------------------------------------------------
+
 
 def test_load_policy_from_file(tmp_path):
     f = tmp_path / ".contextduty.json"
@@ -40,22 +42,30 @@ def test_load_policy_invalid_mode(tmp_path):
 
 def test_load_policy_invalid_regex(tmp_path):
     f = tmp_path / ".contextduty.json"
-    f.write_text(json.dumps({
-        "mode": "redact",
-        "detectors": ["email"],
-        "custom_detectors": {"bad": "[unclosed"},
-    }))
+    f.write_text(
+        json.dumps(
+            {
+                "mode": "redact",
+                "detectors": ["email"],
+                "custom_detectors": {"bad": "[unclosed"},
+            }
+        )
+    )
     with pytest.raises(ValueError, match="regex"):
         load_policy(f)
 
 
 def test_load_policy_custom_conflicts_builtin(tmp_path):
     f = tmp_path / ".contextduty.json"
-    f.write_text(json.dumps({
-        "mode": "redact",
-        "detectors": ["email"],
-        "custom_detectors": {"email": r"\bfoo\b"},
-    }))
+    f.write_text(
+        json.dumps(
+            {
+                "mode": "redact",
+                "detectors": ["email"],
+                "custom_detectors": {"email": r"\bfoo\b"},
+            }
+        )
+    )
     with pytest.raises(ValueError, match="conflicts"):
         load_policy(f)
 
@@ -64,13 +74,18 @@ def test_load_policy_custom_conflicts_builtin(tmp_path):
 # Custom detectors auto-activated
 # ---------------------------------------------------------------------------
 
+
 def test_custom_detectors_auto_activated(tmp_path):
     f = tmp_path / ".contextduty.json"
-    f.write_text(json.dumps({
-        "mode": "redact",
-        "detectors": [],
-        "custom_detectors": {"emp_id": r"\bEMP-[0-9]{6}\b"},
-    }))
+    f.write_text(
+        json.dumps(
+            {
+                "mode": "redact",
+                "detectors": [],
+                "custom_detectors": {"emp_id": r"\bEMP-[0-9]{6}\b"},
+            }
+        )
+    )
     policy = load_policy(f)
     assert "emp_id" in policy.detectors
 
@@ -79,37 +94,50 @@ def test_custom_detectors_auto_activated(tmp_path):
 # Policy layering via extends
 # ---------------------------------------------------------------------------
 
+
 def test_policy_extends_merges_detectors(tmp_path):
     base = tmp_path / "base.json"
     base.write_text(json.dumps({"mode": "warn", "detectors": ["email"]}))
 
     child = tmp_path / "child.json"
-    child.write_text(json.dumps({
-        "extends": "base.json",
-        "mode": "block",
-        "detectors": ["aws_key"],
-    }))
+    child.write_text(
+        json.dumps(
+            {
+                "extends": "base.json",
+                "mode": "block",
+                "detectors": ["aws_key"],
+            }
+        )
+    )
 
     policy = load_policy(child)
-    assert policy.mode == "block"          # child overrides
-    assert "email" in policy.detectors     # from parent
-    assert "aws_key" in policy.detectors   # from child
+    assert policy.mode == "block"  # child overrides
+    assert "email" in policy.detectors  # from parent
+    assert "aws_key" in policy.detectors  # from child
 
 
 def test_policy_extends_child_custom_overrides_parent(tmp_path):
     base = tmp_path / "base.json"
-    base.write_text(json.dumps({
-        "mode": "redact",
-        "detectors": [],
-        "custom_detectors": {"ticket": r"\bTKT-[0-9]{4}\b"},
-    }))
+    base.write_text(
+        json.dumps(
+            {
+                "mode": "redact",
+                "detectors": [],
+                "custom_detectors": {"ticket": r"\bTKT-[0-9]{4}\b"},
+            }
+        )
+    )
     child = tmp_path / "child.json"
-    child.write_text(json.dumps({
-        "extends": "base.json",
-        "mode": "redact",
-        "detectors": [],
-        "custom_detectors": {"ticket": r"\bTICKET-[0-9]{6}\b"},
-    }))
+    child.write_text(
+        json.dumps(
+            {
+                "extends": "base.json",
+                "mode": "redact",
+                "detectors": [],
+                "custom_detectors": {"ticket": r"\bTICKET-[0-9]{6}\b"},
+            }
+        )
+    )
     policy = load_policy(child)
     assert policy.custom_detectors["ticket"] == r"\bTICKET-[0-9]{6}\b"
 
@@ -120,7 +148,9 @@ def test_policy_extends_list(tmp_path):
     b = tmp_path / "b.json"
     b.write_text(json.dumps({"mode": "redact", "detectors": ["phone"]}))
     child = tmp_path / "child.json"
-    child.write_text(json.dumps({"extends": ["a.json", "b.json"], "mode": "block", "detectors": []}))
+    child.write_text(
+        json.dumps({"extends": ["a.json", "b.json"], "mode": "block", "detectors": []})
+    )
 
     policy = load_policy(child)
     assert "email" in policy.detectors
@@ -139,6 +169,7 @@ def test_policy_extends_cycle_detected(tmp_path):
 # ---------------------------------------------------------------------------
 # unknown_detector_names
 # ---------------------------------------------------------------------------
+
 
 def test_unknown_detector_names_returns_unknown(tmp_path):
     f = tmp_path / ".contextduty.json"

@@ -6,7 +6,6 @@ import pytest
 
 from contextduty.detectors import DETECTORS, stable_mask
 
-
 DETECTOR_MAP = {d.name: d for d in DETECTORS}
 
 
@@ -14,20 +13,27 @@ DETECTOR_MAP = {d.name: d for d in DETECTORS}
 # Email
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("value", [
-    "user@example.com",
-    "jane.doe+tag@corp.co.uk",
-    "admin@sub.domain.org",
-])
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "user@example.com",
+        "jane.doe+tag@corp.co.uk",
+        "admin@sub.domain.org",
+    ],
+)
 def test_email_matches(value):
     assert DETECTOR_MAP["email"].pattern.search(value)
 
 
-@pytest.mark.parametrize("value", [
-    "notanemail",
-    "@missinglocal.com",
-    "missing@",
-])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "notanemail",
+        "@missinglocal.com",
+        "missing@",
+    ],
+)
 def test_email_no_false_positives(value):
     assert not DETECTOR_MAP["email"].pattern.search(value)
 
@@ -36,11 +42,15 @@ def test_email_no_false_positives(value):
 # API key
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("value", [
-    "sk_live_ABCDEFGHIJ1234567890",
-    "rk_test_abcdefghijklmnop",
-    "pk_prod_XXXXXXXXXXXXXXXX",
-])
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "sk_live_ABCDEFGHIJ1234567890",
+        "rk_test_abcdefghijklmnop",
+        "pk_prod_XXXXXXXXXXXXXXXX",
+    ],
+)
 def test_api_key_matches(value):
     assert DETECTOR_MAP["api_key"].pattern.search(value)
 
@@ -49,10 +59,14 @@ def test_api_key_matches(value):
 # AWS key
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("value", [
-    "AKIA1234567890ABCDEF",
-    "AKIAIOSFODNN7EXAMPLE",
-])
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "AKIA1234567890ABCDEF",
+        "AKIAIOSFODNN7EXAMPLE",
+    ],
+)
 def test_aws_key_matches(value):
     assert DETECTOR_MAP["aws_key"].pattern.search(value)
 
@@ -65,11 +79,15 @@ def test_aws_key_wrong_prefix():
 # Bearer token
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("value", [
-    "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig",
-    "bearer sometoken123",
-    "BEARER UPPERCASETOKEN",
-])
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig",
+        "bearer sometoken123",
+        "BEARER UPPERCASETOKEN",
+    ],
+)
 def test_bearer_token_matches(value):
     assert DETECTOR_MAP["bearer_token"].pattern.search(value)
 
@@ -77,6 +95,7 @@ def test_bearer_token_matches(value):
 # ---------------------------------------------------------------------------
 # Stable mask
 # ---------------------------------------------------------------------------
+
 
 def test_stable_mask_is_deterministic():
     a = stable_mask("email", "user@example.com")

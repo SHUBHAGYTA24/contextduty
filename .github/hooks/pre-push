@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# .git/hooks/pre-push
+# Runs make check before every git push — blocks the push if anything fails.
+# Install: cp .github/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
+set -e
+
+echo ""
+echo "▶ Running pre-push checks (make check)..."
+echo ""
+
+make check
+
+echo ""
+echo "✓ Pre-push checks passed."
+echo ""

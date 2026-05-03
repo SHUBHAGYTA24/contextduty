@@ -52,7 +52,9 @@ def scan_file(path: Path, policy: Policy) -> ScanResult:
             for finding in findings:
                 detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
     blocked = findings_count > 0 and policy.mode == "block"
-    return ScanResult(findings_count=findings_count, detector_counts=detector_counts, blocked=blocked)
+    return ScanResult(
+        findings_count=findings_count, detector_counts=detector_counts, blocked=blocked
+    )
 
 
 def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
@@ -61,9 +63,10 @@ def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResu
     findings_count = 0
     blocked = False
 
-    with input_path.open("r", encoding="utf-8", errors="replace") as source, output_path.open(
-        "w", encoding="utf-8"
-    ) as target:
+    with (
+        input_path.open("r", encoding="utf-8", errors="replace") as source,
+        output_path.open("w", encoding="utf-8") as target,
+    ):
         for line in source:
             updated = line
             findings = _scan_line(updated, detectors)
@@ -71,13 +74,17 @@ def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResu
             for finding in findings:
                 detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
                 if policy.mode == "redact":
-                    updated = updated.replace(finding.value, stable_mask(finding.detector, finding.value))
+                    updated = updated.replace(
+                        finding.value, stable_mask(finding.detector, finding.value)
+                    )
             target.write(updated)
 
     if findings_count > 0 and policy.mode == "block":
         blocked = True
 
-    return ScanResult(findings_count=findings_count, detector_counts=detector_counts, blocked=blocked)
+    return ScanResult(
+        findings_count=findings_count, detector_counts=detector_counts, blocked=blocked
+    )
 
 
 @dataclass(frozen=True)
@@ -105,7 +112,9 @@ def scan_text(text: str, policy: Policy) -> ScanTextResult:
         for finding in findings:
             detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
             if policy.mode == "redact":
-                redacted = redacted.replace(finding.value, stable_mask(finding.detector, finding.value))
+                redacted = redacted.replace(
+                    finding.value, stable_mask(finding.detector, finding.value)
+                )
 
     blocked = findings_count > 0 and policy.mode == "block"
     scan_result = ScanResult(
@@ -113,7 +122,9 @@ def scan_text(text: str, policy: Policy) -> ScanTextResult:
         detector_counts=detector_counts,
         blocked=blocked,
     )
-    return ScanTextResult(scan=scan_result, redacted_text=redacted if policy.mode == "redact" else text)
+    return ScanTextResult(
+        scan=scan_result, redacted_text=redacted if policy.mode == "redact" else text
+    )
 
 
 def report_to_json(result: ScanResult) -> str:

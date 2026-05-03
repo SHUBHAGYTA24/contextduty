@@ -2,6 +2,10 @@
 
 Thanks for your interest in contributing.
 
+## First-time setup
+After cloning, install the git hook:
+    cp .github/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+
 ## Development setup
 
 ```bash

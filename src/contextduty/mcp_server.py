@@ -18,7 +18,6 @@ from typing import Any
 from .engine import redact_file, report_to_json, scan_file, scan_text
 from .policy import load_policy
 
-
 PROTOCOL_VERSION = "2025-06-18"
 
 
@@ -35,7 +34,9 @@ def _ok(_id: Any, result: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": _id, "result": result}
 
 
-def _tool_result(text: str, is_error: bool = False, structured: dict[str, Any] | None = None) -> dict[str, Any]:
+def _tool_result(
+    text: str, is_error: bool = False, structured: dict[str, Any] | None = None
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": is_error}
     if structured is not None:
         payload["structuredContent"] = structured
@@ -49,13 +50,16 @@ def _tools_list() -> list[dict[str, Any]]:
             "title": "ContextDuty Scan Text",
             "description": (
                 "Scan a raw text string for sensitive data (emails, API keys, tokens, etc.) "
-                "before it is sent to an LLM. Returns findings and the redacted version of the text. "
+                "before it is sent to an LLM. Returns findings and the redacted version of the text."  # noqa: E501
                 "Use this to check prompt content, log snippets, or any in-memory string."
             ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string", "description": "The text content to scan and redact."},
+                    "text": {
+                        "type": "string",
+                        "description": "The text content to scan and redact.",
+                    },
                     "policyPath": {
                         "type": "string",
                         "description": "Optional policy JSON path (.contextduty.json).",
@@ -83,7 +87,7 @@ def _tools_list() -> list[dict[str, Any]]:
         {
             "name": "contextduty_redact",
             "title": "ContextDuty Redact",
-            "description": "Redact sensitive data from an input file into an output file based on ContextDuty policy.",
+            "description": "Redact sensitive data from an input file into an output file based on ContextDuty policy.",  # noqa: E501
             "inputSchema": {
                 "type": "object",
                 "properties": {

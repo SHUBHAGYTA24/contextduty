@@ -5,9 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
-
-import pytest
 
 
 def run(*args, input_text: str | None = None) -> subprocess.CompletedProcess:
@@ -23,6 +20,7 @@ def run(*args, input_text: str | None = None) -> subprocess.CompletedProcess:
 # --version
 # ---------------------------------------------------------------------------
 
+
 def test_version_flag():
     result = run("--version")
     assert result.returncode == 0
@@ -32,6 +30,7 @@ def test_version_flag():
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------
+
 
 def test_init_creates_policy(tmp_path):
     out = tmp_path / "policy.json"
@@ -46,6 +45,7 @@ def test_init_creates_policy(tmp_path):
 # ---------------------------------------------------------------------------
 # scan
 # ---------------------------------------------------------------------------
+
 
 def test_scan_clean_file_exits_zero(tmp_path):
     f = tmp_path / "clean.txt"
@@ -97,6 +97,7 @@ def test_scan_writes_report_file(tmp_path):
 # redact
 # ---------------------------------------------------------------------------
 
+
 def test_redact_removes_sensitive_values(tmp_path):
     src = tmp_path / "in.txt"
     out = tmp_path / "out.txt"
@@ -119,6 +120,7 @@ def test_redact_clean_file_unchanged(tmp_path):
 # ---------------------------------------------------------------------------
 # policy validate
 # ---------------------------------------------------------------------------
+
 
 def test_policy_validate_valid(tmp_path):
     p = tmp_path / "p.json"

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from contextduty.engine import scan_text, ScanResult
+from contextduty.engine import scan_text
 from contextduty.policy import Policy
 
 
@@ -19,6 +17,7 @@ def _policy(mode: str = "redact", detectors=None) -> Policy:
 # ---------------------------------------------------------------------------
 # scan_text — basic detection
 # ---------------------------------------------------------------------------
+
 
 def test_scan_text_detects_email():
     result = scan_text("contact: user@example.com", _policy())
@@ -48,6 +47,7 @@ def test_scan_text_clean_input():
 # scan_text — redact mode
 # ---------------------------------------------------------------------------
 
+
 def test_scan_text_redact_mode_masks_value():
     result = scan_text("email: user@example.com", _policy(mode="redact"))
     assert "user@example.com" not in result.redacted_text
@@ -71,6 +71,7 @@ def test_scan_text_redact_is_deterministic():
 # scan_text — block mode
 # ---------------------------------------------------------------------------
 
+
 def test_scan_text_block_mode_sets_blocked():
     result = scan_text("key=AKIA1234567890ABCDEF", _policy(mode="block"))
     assert result.scan.blocked is True
@@ -84,6 +85,7 @@ def test_scan_text_block_mode_clean_not_blocked():
 # ---------------------------------------------------------------------------
 # scan_text — warn mode
 # ---------------------------------------------------------------------------
+
 
 def test_scan_text_warn_mode_not_blocked():
     result = scan_text("user@example.com", _policy(mode="warn"))
@@ -101,6 +103,7 @@ def test_scan_text_warn_mode_text_unchanged():
 # scan_text — custom detectors
 # ---------------------------------------------------------------------------
 
+
 def test_scan_text_custom_detector():
     policy = Policy(
         mode="redact",
@@ -116,6 +119,7 @@ def test_scan_text_custom_detector():
 # ---------------------------------------------------------------------------
 # scan_text — multiline
 # ---------------------------------------------------------------------------
+
 
 def test_scan_text_multiline():
     text = "line1: user@example.com\nline2: clean\nline3: AKIA1234567890ABCDEF"

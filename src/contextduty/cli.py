@@ -14,7 +14,9 @@ from .policy import load_policy, unknown_detector_names, write_default_policy
 def _parser() -> argparse.ArgumentParser:
     from . import __version__
 
-    parser = argparse.ArgumentParser(prog="contextduty", description="Protect AI context with policy checks.")
+    parser = argparse.ArgumentParser(
+        prog="contextduty", description="Protect AI context with policy checks."
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -34,7 +36,9 @@ def _parser() -> argparse.ArgumentParser:
 
     policy_parser = subparsers.add_parser("policy", help="Policy operations.")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command", required=True)
-    validate_parser = policy_subparsers.add_parser("validate", help="Validate and resolve a policy file.")
+    validate_parser = policy_subparsers.add_parser(
+        "validate", help="Validate and resolve a policy file."
+    )
     validate_parser.add_argument("--policy", default=".contextduty.json", help="Policy path.")
     validate_parser.add_argument(
         "--strict",

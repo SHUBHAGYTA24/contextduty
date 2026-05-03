@@ -51,9 +51,13 @@ def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dic
 
     base_detectors = base.get("detectors", [])
     override_detectors = override.get("detectors", [])
-    if not isinstance(base_detectors, list) or not all(isinstance(name, str) for name in base_detectors):
+    if not isinstance(base_detectors, list) or not all(
+        isinstance(name, str) for name in base_detectors
+    ):
         raise ValueError("policy detectors must be a list of strings")
-    if not isinstance(override_detectors, list) or not all(isinstance(name, str) for name in override_detectors):
+    if not isinstance(override_detectors, list) or not all(
+        isinstance(name, str) for name in override_detectors
+    ):
         raise ValueError("policy detectors must be a list of strings")
     merged["detectors"] = list(dict.fromkeys(base_detectors + override_detectors))
 
@@ -107,7 +111,9 @@ def load_policy(path: Path | None) -> Policy:
     if mode not in {"redact", "warn", "block"}:
         raise ValueError("policy mode must be one of: redact, warn, block")
     detectors_raw = config.get("detectors", DEFAULT_POLICY["detectors"])
-    if not isinstance(detectors_raw, list) or not all(isinstance(name, str) for name in detectors_raw):
+    if not isinstance(detectors_raw, list) or not all(
+        isinstance(name, str) for name in detectors_raw
+    ):
         raise ValueError("policy detectors must be a list of strings")
 
     custom_raw = config.get("custom_detectors", {})

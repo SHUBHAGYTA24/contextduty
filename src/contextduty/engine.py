@@ -23,6 +23,23 @@ class ScanResult:
     findings_count: int
     detector_counts: dict[str, int]
     blocked: bool
+    # Detectors that triggered a block (subset of detector_counts keys).
+    blocked_by: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.blocked_by is None:
+            object.__setattr__(self, "blocked_by", [])
+
+
+def _effective_mode(policy: Policy, detector_name: str) -> str:
+    """Return the mode for a specific detector, falling back to the global policy mode."""
+    return policy.detector_modes.get(detector_name, policy.mode)
+
+
+def _is_allowed(value: str, detector_name: str, policy: Policy) -> bool:
+    """Return True if the value matches any allow_pattern for this detector."""
+    patterns = policy.allow_patterns.get(detector_name, [])
+    return any(re.search(pattern, value) for pattern in patterns)
 
 
 def _active_detectors(policy: Policy) -> list[Detector]:
@@ -41,49 +58,69 @@ def _scan_line(line: str, detectors: Iterable[Detector]) -> list[Finding]:
     return findings
 
 
+def _apply_findings(
+    text: str,
+    findings: list[Finding],
+    policy: Policy,
+    detector_counts: dict[str, int],
+    blocked_detectors: set[str],
+) -> str:
+    """Apply per-detector mode logic to a text segment. Returns the (possibly redacted) text."""
+    updated = text
+    for finding in findings:
+        if _is_allowed(finding.value, finding.detector, policy):
+            continue
+        detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
+        mode = _effective_mode(policy, finding.detector)
+        if mode == "block":
+            blocked_detectors.add(finding.detector)
+        elif mode == "redact":
+            updated = updated.replace(finding.value, stable_mask(finding.detector, finding.value))
+        # mode == "warn": count it, don't mask, don't block
+    return updated
+
+
 def scan_file(path: Path, policy: Policy) -> ScanResult:
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
-    findings_count = 0
+    blocked_detectors: set[str] = set()
+
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             findings = _scan_line(line, detectors)
-            findings_count += len(findings)
-            for finding in findings:
-                detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
-    blocked = findings_count > 0 and policy.mode == "block"
+            _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
+
+    findings_count = sum(detector_counts.values())
+    blocked = len(blocked_detectors) > 0
     return ScanResult(
-        findings_count=findings_count, detector_counts=detector_counts, blocked=blocked
+        findings_count=findings_count,
+        detector_counts=detector_counts,
+        blocked=blocked,
+        blocked_by=sorted(blocked_detectors),
     )
 
 
 def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
-    findings_count = 0
-    blocked = False
+    blocked_detectors: set[str] = set()
 
     with (
         input_path.open("r", encoding="utf-8", errors="replace") as source,
         output_path.open("w", encoding="utf-8") as target,
     ):
         for line in source:
-            updated = line
-            findings = _scan_line(updated, detectors)
-            findings_count += len(findings)
-            for finding in findings:
-                detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
-                if policy.mode == "redact":
-                    updated = updated.replace(
-                        finding.value, stable_mask(finding.detector, finding.value)
-                    )
+            findings = _scan_line(line, detectors)
+            updated = _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
             target.write(updated)
 
-    if findings_count > 0 and policy.mode == "block":
-        blocked = True
-
+    findings_count = sum(detector_counts.values())
+    blocked = len(blocked_detectors) > 0
     return ScanResult(
-        findings_count=findings_count, detector_counts=detector_counts, blocked=blocked
+        findings_count=findings_count,
+        detector_counts=detector_counts,
+        blocked=blocked,
+        blocked_by=sorted(blocked_detectors),
     )
 
 
@@ -103,27 +140,25 @@ def scan_text(text: str, policy: Policy) -> ScanTextResult:
     """
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
-    findings_count = 0
-    redacted = text
+    blocked_detectors: set[str] = set()
+    redacted_lines: list[str] = []
 
     for line in text.splitlines(keepends=True):
         findings = _scan_line(line, detectors)
-        findings_count += len(findings)
-        for finding in findings:
-            detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
-            if policy.mode == "redact":
-                redacted = redacted.replace(
-                    finding.value, stable_mask(finding.detector, finding.value)
-                )
+        updated = _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
+        redacted_lines.append(updated)
 
-    blocked = findings_count > 0 and policy.mode == "block"
+    findings_count = sum(detector_counts.values())
+    blocked = len(blocked_detectors) > 0
     scan_result = ScanResult(
         findings_count=findings_count,
         detector_counts=detector_counts,
         blocked=blocked,
+        blocked_by=sorted(blocked_detectors),
     )
     return ScanTextResult(
-        scan=scan_result, redacted_text=redacted if policy.mode == "redact" else text
+        scan=scan_result,
+        redacted_text="".join(redacted_lines),
     )
 
 
@@ -132,5 +167,6 @@ def report_to_json(result: ScanResult) -> str:
         "findings_count": result.findings_count,
         "detector_counts": result.detector_counts,
         "blocked": result.blocked,
+        "blocked_by": result.blocked_by,
     }
     return json.dumps(payload, indent=2)

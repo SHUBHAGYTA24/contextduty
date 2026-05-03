@@ -241,12 +241,10 @@ bash demo/demo.sh
 ## Roadmap
 
 - [x] PyPI publish (`pip install contextduty`)
-- [ ] `contextduty scan` supports directories (`scan src/`)
-- [ ] Presidio integration as optional NLP detector backend
-- [ ] Streaming JSONL mode for multi-GB datasets
-- [ ] GitHub Action (`uses: contextduty/action@v1`)
-- [ ] VS Code extension
-- [ ] Policy packs for PCI-DSS
+- [ ] Directory scanning (`contextduty scan src/`)
+- [ ] Presidio integration as optional NLP backend
+
+Have an idea? [Open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues).
 
 ---
 

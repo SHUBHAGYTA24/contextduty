@@ -1,0 +1,11 @@
+id: contextduty-scan
+name: ContextDuty — scan for secrets and PII
+description: >
+  Scans staged files for sensitive data (API keys, emails, AWS credentials,
+  bearer tokens) before commit. Enforces your .contextduty.json policy.
+entry: contextduty-pre-commit
+language: python
+types: [text]
+pass_filenames: true
+additional_dependencies: []
+OUTPUT=$(contextduty scan "${{SCAN_ARGS[@]}}" 2>&1)

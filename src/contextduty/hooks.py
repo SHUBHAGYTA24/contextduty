@@ -1,246 +1,230 @@
-# ruff: noqa: E501
-"""Git hook installation and pre-commit scanning for ContextDuty.
+"""
+contextduty.hooks
+~~~~~~~~~~~~~~~~~
+Install / uninstall git pre-commit and pre-push hooks.
 
-Usage:
-    contextduty install-hooks [--audit-log <path>] [--policy <path>]
-
-This writes a git pre-commit hook to .git/hooks/pre-commit that:
-1. Gets all staged files from git (text files only)
-2. Scans each one against your ContextDuty policy
-3. Blocks the commit if any file has findings in block mode
-4. Optionally appends to an audit log
-
-The hook is written as a shell script that calls contextduty directly,
-so it works even if the engineer switches Python virtualenvs.
-
-Also supports the pre-commit framework (https://pre-commit.com) via
-the hooks definition at .pre-commit-hooks.yaml.
+  contextduty install-hook [--hook pre-push|pre-commit] [--repo .]
+  contextduty uninstall-hook [--hook pre-push|pre-commit] [--repo .]
 """
 
-from __future__ import annotations
-
+import os
 import stat
-import sys
 from pathlib import Path
+from typing import Literal
 
-# The shell script written to .git/hooks/pre-commit
-_HOOK_TEMPLATE = """\
-#!/usr/bin/env bash
+HookType = Literal["pre-commit", "pre-push"]
+
+# ---------------------------------------------------------------------------
+# Hook script templates
+# ---------------------------------------------------------------------------
+
+_PRE_COMMIT_SCRIPT = """\
+#!/usr/bin/env sh
 # ContextDuty pre-commit hook
-# Installed by: contextduty install-hooks
-# To uninstall: rm .git/hooks/pre-commit
-#
-# Scans all staged text files against your ContextDuty policy.
-# Blocks the commit if any file has findings in block mode.
-# Edit CONTEXTDUTY_POLICY and CONTEXTDUTY_AUDIT_LOG below to customise.
+# Auto-installed by: contextduty install-hook --hook pre-commit
+# Remove with:       contextduty uninstall-hook --hook pre-commit
+set -e
 
-set -euo pipefail
-
-CONTEXTDUTY_POLICY="{policy}"
-CONTEXTDUTY_AUDIT_LOG="{audit_log}"
-
-# Require contextduty to be installed
-if ! command -v contextduty &>/dev/null; then
-  echo "[ContextDuty] contextduty not found in PATH."
-  echo "  Run: pip install contextduty"
-  exit 1
-fi
-
-# Get staged files — text files only, skip deleted files
+# Collect staged files
 STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
 
 if [ -z "$STAGED" ]; then
   exit 0
 fi
 
-BLOCKED=0
-FINDINGS=0
+# Check contextduty is available
+if ! command -v contextduty > /dev/null 2>&1; then
+  echo "[ContextDuty] WARNING: contextduty not found on PATH, skipping hook." >&2
+  exit 0
+fi
 
-while IFS= read -r file; do
-  # Skip binary files
-  if ! file "$file" 2>/dev/null | grep -qE "text|JSON|CSV|XML|script"; then
+FAILED=0
+for FILE in $STAGED; do
+  # Only scan text-like files
+  case "$FILE" in
+    *.py|*.js|*.ts|*.tsx|*.jsx|*.env|*.env.*|*.json|*.yaml|*.yml|*.toml|*.ini|*.cfg|*.sh|*.bash|*.zsh|*.txt|*.md|*.tf|*.hcl|*.rb|*.go|*.java|*.rs|*.cs|*.php|*.xml|*.conf|*.config)
+      ;;
+    *)
+      continue
+      ;;
+  esac
+
+  if [ ! -f "$FILE" ]; then
     continue
   fi
 
-  SCAN_ARGS=("$file")
-  if [ -f "$CONTEXTDUTY_POLICY" ]; then
-    SCAN_ARGS+=(--policy "$CONTEXTDUTY_POLICY")
-  fi
-  if [ -n "$CONTEXTDUTY_AUDIT_LOG" ]; then
-    SCAN_ARGS+=(--audit-log "$CONTEXTDUTY_AUDIT_LOG")
-  fi
-
-  OUTPUT=$(contextduty scan "${{SCAN_ARGS[@]}}" 2>&1)
+  RESULT=$(contextduty scan "$FILE" 2>&1)
   EXIT_CODE=$?
 
-  # Parse findings_count from JSON output
-  COUNT=$(echo "$OUTPUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('findings_count',0))" 2>/dev/null || echo "0")
-  FINDINGS=$((FINDINGS + COUNT))
-
-  if [ "$EXIT_CODE" -ne 0 ]; then
+  if [ $EXIT_CODE -ne 0 ]; then
     echo ""
-    echo "[ContextDuty] BLOCKED: $file"
-    echo "$OUTPUT" | python3 -c "
-import json, sys
-try:
-    d = json.loads(sys.stdin.read())
-    for det, count in d.get('detector_counts', {{}}).items():
-        print(f'  {{det}}: {{count}} finding(s)')
-    for det in d.get('blocked_by', []):
-        print(f'  → {{det}} is set to block mode')
-except Exception:
-    pass
-" 2>/dev/null || true
-    BLOCKED=1
-  elif [ "$COUNT" -gt 0 ]; then
-    echo "[ContextDuty] WARNING: $file — $COUNT finding(s) (not blocked by current policy)"
+    echo "╔══════════════════════════════════════════════════════╗"
+    echo "║  ContextDuty — SECRET DETECTED, commit blocked       ║"
+    echo "╠══════════════════════════════════════════════════════╣"
+    echo "║  File: $FILE"
+    echo "╚══════════════════════════════════════════════════════╝"
+    echo "$RESULT"
+    echo ""
+    echo "  Fix: remove the secret, then re-stage the file."
+    echo "  Use environment variables or a secrets manager instead."
+    echo "  Override (not recommended): git commit --no-verify"
+    echo ""
+    FAILED=1
   fi
-done <<< "$STAGED"
+done
 
-if [ "$BLOCKED" -eq 1 ]; then
-  echo ""
-  echo "╔══════════════════════════════════════════════════════════════╗"
-  echo "║  ContextDuty blocked this commit.                           ║"
-  echo "║                                                              ║"
-  echo "║  Sensitive values were found in staged files.               ║"
-  echo "║  Remove or redact them before committing.                   ║"
-  echo "║                                                              ║"
-  echo "║  To redact a file:                                          ║"
-  echo "║    contextduty redact --in <file> --out <file>              ║"
-  echo "║                                                              ║"
-  echo "║  To bypass (NOT recommended):                               ║"
-  echo "║    git commit --no-verify                                   ║"
-  echo "╚══════════════════════════════════════════════════════════════╝"
+if [ $FAILED -ne 0 ]; then
   exit 1
 fi
 
-if [ "$FINDINGS" -gt 0 ]; then
-  echo "[ContextDuty] $FINDINGS finding(s) noted (warn mode — commit allowed)"
-fi
-
+echo "[ContextDuty] ✓ No secrets found in staged files."
 exit 0
 """
 
-_PRE_COMMIT_HOOKS_YAML = """\
-# .pre-commit-hooks.yaml
-# ContextDuty hook for use with https://pre-commit.com
-#
-# Add to your .pre-commit-config.yaml:
-#
-#   repos:
-#     - repo: https://github.com/SHUBHAGYTA24/contextduty
-#       rev: v0.1.0
-#       hooks:
-#         - id: contextduty-scan
-#
-- id: contextduty-scan
-  name: ContextDuty — scan for secrets and PII
-  description: Scans staged files for sensitive data before commit.
-  entry: contextduty-pre-commit
-  language: python
-  types: [text]
-  pass_filenames: true
-  additional_dependencies: []
+_PRE_PUSH_SCRIPT = """\
+#!/usr/bin/env sh
+# ContextDuty pre-push hook
+# Auto-installed by: contextduty install-hook --hook pre-push
+# Remove with:       contextduty uninstall-hook --hook pre-push
+set -e
+
+REMOTE="$1"
+URL="$2"
+
+# Read pushed refs from stdin (format: <local-ref> <local-sha> <remote-ref> <remote-sha>)
+while read local_ref local_sha remote_ref remote_sha; do
+  # Skip deletions
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # Get list of changed files in this push
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch — compare against first parent or all commits
+    RANGE="$local_sha"
+    FILES=$(git diff-tree --no-commit-id -r --name-only "$local_sha" 2>/dev/null || true)
+  else
+    RANGE="$remote_sha..$local_sha"
+    FILES=$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)
+  fi
+
+  if [ -z "$FILES" ]; then
+    continue
+  fi
+
+  if ! command -v contextduty > /dev/null 2>&1; then
+    echo "[ContextDuty] WARNING: contextduty not found on PATH, skipping hook." >&2
+    exit 0
+  fi
+
+  FAILED=0
+  for FILE in $FILES; do
+    case "$FILE" in
+      *.py|*.js|*.ts|*.tsx|*.jsx|*.env|*.env.*|*.json|*.yaml|*.yml|*.toml|*.ini|*.cfg|*.sh|*.bash|*.zsh|*.txt|*.md|*.tf|*.hcl|*.rb|*.go|*.java|*.rs|*.cs|*.php|*.xml|*.conf|*.config)
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    if [ ! -f "$FILE" ]; then
+      continue
+    fi
+
+    RESULT=$(contextduty scan "$FILE" 2>&1)
+    EXIT_CODE=$?
+
+    if [ $EXIT_CODE -ne 0 ]; then
+      echo ""
+      echo "╔══════════════════════════════════════════════════════╗"
+      echo "║  ContextDuty — SECRET DETECTED, push blocked        ║"
+      echo "╠══════════════════════════════════════════════════════╣"
+      echo "║  File:   $FILE"
+      echo "║  Remote: $REMOTE ($URL)"
+      echo "╚══════════════════════════════════════════════════════╝"
+      echo "$RESULT"
+      echo ""
+      echo "  Fix: remove the secret and recommit before pushing."
+      echo "  Override (not recommended): git push --no-verify"
+      echo ""
+      FAILED=1
+    fi
+  done
+
+  if [ $FAILED -ne 0 ]; then
+    exit 1
+  fi
+done
+
+echo "[ContextDuty] ✓ No secrets found in push."
+exit 0
 """
 
+_MARKER = "# ContextDuty hook"
 
-def install_git_hook(
-    repo_root: Path,
-    policy_path: str = ".contextduty.json",
-    audit_log: str = "",
-) -> Path:
-    """Write the pre-commit hook to .git/hooks/pre-commit.
 
-    Returns the path to the installed hook.
-    Raises FileNotFoundError if the repo root has no .git directory.
-    Raises RuntimeError if a non-ContextDuty hook already exists (will not overwrite).
-    """
-    git_dir = repo_root / ".git"
+def _git_dir(repo: str) -> Path:
+    git_dir = Path(repo) / ".git"
     if not git_dir.is_dir():
-        raise FileNotFoundError(f"No .git directory found at {repo_root}. Is this a git repo?")
+        raise RuntimeError(f"No .git directory found at {repo!r}. "
+                           "Run from inside a git repository.")
+    return git_dir
 
-    hooks_dir = git_dir / "hooks"
-    hooks_dir.mkdir(exist_ok=True)
-    hook_path = hooks_dir / "pre-commit"
 
-    # Refuse to overwrite a hook we didn't install
+def install_hook(hook_type: HookType = "pre-push", repo: str = ".") -> str:
+    """
+    Install the ContextDuty git hook.
+    If the hook file already exists and was NOT installed by us, we append
+    rather than overwrite (safe composition).
+    Returns path to the hook file.
+    """
+    hook_path = _git_dir(repo) / "hooks" / hook_type
+    script = _PRE_COMMIT_SCRIPT if hook_type == "pre-commit" else _PRE_PUSH_SCRIPT
+
     if hook_path.exists():
         existing = hook_path.read_text(encoding="utf-8")
-        if "ContextDuty pre-commit hook" not in existing:
-            raise RuntimeError(
-                f"A pre-commit hook already exists at {hook_path} and was not installed by "
-                "ContextDuty. Remove it manually or append ContextDuty to it, then re-run."
-            )
+        if _MARKER in existing:
+            return str(hook_path)  # already installed, idempotent
+        # Append our hook after the existing one
+        combined = existing.rstrip("\n") + "\n\n" + script
+        hook_path.write_text(combined, encoding="utf-8")
+    else:
+        hook_path.write_text(script, encoding="utf-8")
 
-    hook_content = _HOOK_TEMPLATE.format(
-        policy=policy_path,
-        audit_log=audit_log,
-    )
-
-    hook_path.write_text(hook_content, encoding="utf-8")
-    hook_path.chmod(hook_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    return hook_path
+    # Make executable
+    mode = hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+    hook_path.chmod(mode)
+    return str(hook_path)
 
 
-def uninstall_git_hook(repo_root: Path) -> bool:
-    """Remove the ContextDuty pre-commit hook if present.
-
-    Returns True if removed, False if no ContextDuty hook was found.
-    Raises RuntimeError if the hook exists but was not installed by ContextDuty.
+def uninstall_hook(hook_type: HookType = "pre-push", repo: str = ".") -> bool:
     """
-    hook_path = repo_root / ".git" / "hooks" / "pre-commit"
+    Remove ContextDuty block from hook file.
+    If that was the only content, remove the file entirely.
+    Returns True if anything was removed.
+    """
+    hook_path = _git_dir(repo) / "hooks" / hook_type
     if not hook_path.exists():
         return False
-    existing = hook_path.read_text(encoding="utf-8")
-    if "ContextDuty pre-commit hook" not in existing:
-        raise RuntimeError(
-            f"Hook at {hook_path} was not installed by ContextDuty. Remove it manually."
-        )
-    hook_path.unlink()
+
+    content = hook_path.read_text(encoding="utf-8")
+    if _MARKER not in content:
+        return False
+
+    # Find and remove the ContextDuty block (from marker to end of script)
+    # Our scripts are self-contained from the first marker line
+    lines = content.splitlines(keepends=True)
+    out_lines = []
+    inside = False
+    for line in lines:
+        if _MARKER in line:
+            inside = True
+        if not inside:
+            out_lines.append(line)
+
+    remaining = "".join(out_lines).strip()
+    if not remaining or remaining == "#!/usr/bin/env sh":
+        hook_path.unlink()
+    else:
+        hook_path.write_text(remaining + "\n", encoding="utf-8")
     return True
-
-
-def write_pre_commit_hooks_yaml(repo_root: Path) -> Path:
-    """Write .pre-commit-hooks.yaml for use with the pre-commit framework."""
-    out = repo_root / ".pre-commit-hooks.yaml"
-    out.write_text(_PRE_COMMIT_HOOKS_YAML, encoding="utf-8")
-    return out
-
-
-def pre_commit_entrypoint(files: list[str]) -> int:
-    """Entrypoint for contextduty-pre-commit — used by the pre-commit framework.
-
-    Receives staged file paths as arguments (pre-commit passes them automatically).
-    Returns exit code: 0 = clean, 1 = blocked.
-    """
-    from .engine import scan_file
-    from .policy import load_policy
-
-    policy_path = Path(".contextduty.json")
-    policy = load_policy(policy_path if policy_path.exists() else None)
-
-    blocked = False
-    for file_str in files:
-        path = Path(file_str)
-        if not path.exists() or not path.is_file():
-            continue
-        try:
-            result = scan_file(path, policy)
-        except Exception as exc:
-            print(f"[ContextDuty] Error scanning {file_str}: {exc}", file=sys.stderr)
-            continue
-
-        if result.findings_count > 0:
-            print(f"[ContextDuty] {file_str}: {result.findings_count} finding(s)", file=sys.stderr)
-            for det, count in result.detector_counts.items():
-                print(f"  {det}: {count}", file=sys.stderr)
-
-        if result.blocked:
-            blocked = True
-
-    return 1 if blocked else 0
-
-
-def main_pre_commit() -> None:
-    """CLI entrypoint: contextduty-pre-commit <file> [<file> ...]"""
-    raise SystemExit(pre_commit_entrypoint(sys.argv[1:]))

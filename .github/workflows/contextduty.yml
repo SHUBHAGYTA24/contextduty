@@ -1,0 +1,62 @@
+name: ContextDuty Secret Scan
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main", "master", "develop"]
+
+jobs:
+  secret-scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for scan-history command
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ContextDuty
+        run: pip install contextduty
+
+      - name: Scan changed files
+        run: |
+          # On PRs, only scan the diff; on push, scan the full src tree
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+              | grep -E '\.(py|js|ts|tsx|jsx|env|json|yaml|yml|toml|sh|tf|hcl|rb|go|java|rs)$' \
+              || true)
+            if [ -z "$FILES" ]; then
+              echo "No scannable files changed."
+              exit 0
+            fi
+            for FILE in $FILES; do
+              if [ -f "$FILE" ]; then
+                contextduty scan "$FILE" --policy .contextduty.json
+              fi
+            done
+          else
+            contextduty scan src/ --policy .contextduty.json
+          fi
+
+      - name: Scan git history (push to default branch only)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          contextduty scan-history --since "30 days ago" --max-commits 200 \
+            --report history-scan-report.json || true
+          cat history-scan-report.json
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextduty-reports
+          path: |
+            *-report.json
+          if-no-files-found: ignore

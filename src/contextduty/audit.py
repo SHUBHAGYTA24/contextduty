@@ -1,129 +1,145 @@
-"""Structured audit logging for ContextDuty.
-
-Every scan and redact operation can emit a JSONL entry to an audit log.
-The log never records matched values — only that a finding occurred,
-which detector fired, and what enforcement action was taken.
-
-This gives enterprise security teams the audit trail they need for
-SOC 2, HIPAA, and internal AI usage governance without creating a
-secondary leak vector.
-
-Usage:
-    contextduty scan file.txt --audit-log /var/log/contextduty/audit.jsonl
-    contextduty report --audit-log /var/log/contextduty/audit.jsonl
 """
+contextduty.audit
+~~~~~~~~~~~~~~~~~
+Local append-only audit log.
 
-from __future__ import annotations
+Every scan / redact / interception is written to:
+  ~/.contextduty/audit.jsonl   (JSONL, one record per line)
+
+Records are never deleted by this module — rotation / archival is the
+operator's responsibility (or a future `contextduty audit rotate` command).
+
+Schema per record:
+{
+  "ts":          "<ISO-8601 UTC>",
+  "op":          "scan" | "redact" | "mcp_intercept" | "hook_block",
+  "source":      "<file path or 'stdin' or 'mcp:prompt'>",
+  "policy_mode": "warn" | "redact" | "block",
+  "findings":    { "<detector>": <count>, ... },
+  "findings_count": <int>,
+  "blocked":     true | false,
+  "masked_values_count": <int>,   // only on redact ops
+  "session_id":  "<uuid4>",       // groups events in one CLI run
+  "version":     "<tool version>"
+}
+"""
 
 import json
 import os
-import socket
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-from .engine import ScanResult
+_SESSION_ID = str(uuid.uuid4())
+_AUDIT_DIR = Path.home() / ".contextduty"
+_AUDIT_FILE = _AUDIT_DIR / "audit.jsonl"
 
-
-def _identity() -> dict[str, str]:
-    """Collect non-sensitive identity context for the audit entry."""
-    return {
-        "hostname": socket.gethostname(),
-        "user": os.environ.get("CONTEXTDUTY_USER")
-        or os.environ.get("USER")
-        or os.environ.get("USERNAME")
-        or "unknown",
-        "tool": os.environ.get("CONTEXTDUTY_TOOL", "cli"),
-    }
+try:
+    from importlib.metadata import version as _pkg_version
+    _VERSION = _pkg_version("contextduty")
+except Exception:
+    _VERSION = "dev"
 
 
-def write_audit_entry(
-    *,
-    operation: str,
-    result: ScanResult,
-    policy_path: str | None,
-    target: str,
-    audit_log_path: Path,
+def _ensure_dir() -> None:
+    _AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def record(
+    op: str,
+    source: str,
+    policy_mode: str,
+    findings: Dict[str, int],
+    blocked: bool,
+    masked_values_count: int = 0,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Append one JSONL audit entry to audit_log_path.
-
-    Args:
-        operation: "scan" or "redact"
-        result: the ScanResult from the engine
-        policy_path: path to the policy file used, or None for default
-        target: the file path or "<text>" for in-memory scans
-        audit_log_path: path to the JSONL audit log file
-    """
-    audit_log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    entry = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "operation": operation,
-        "target": target,
-        "policy": policy_path or "<default>",
-        "findings_count": result.findings_count,
-        "detector_counts": result.detector_counts,
-        "blocked": result.blocked,
-        "blocked_by": result.blocked_by,
-        **_identity(),
-    }
-
-    with audit_log_path.open("a", encoding="utf-8") as log:
-        log.write(json.dumps(entry, separators=(",", ":")) + "\n")
+    """Append one record to the audit log. Silent on failure (never crash the tool)."""
+    try:
+        _ensure_dir()
+        entry: Dict[str, Any] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "op": op,
+            "source": source,
+            "policy_mode": policy_mode,
+            "findings": findings,
+            "findings_count": sum(findings.values()),
+            "blocked": blocked,
+            "masked_values_count": masked_values_count,
+            "session_id": _SESSION_ID,
+            "version": _VERSION,
+        }
+        if extra:
+            entry.update(extra)
+        with _AUDIT_FILE.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass  # audit failures must never break the tool
 
 
-def generate_report(audit_log_path: Path) -> dict:
-    """Read the audit log and produce a summary report.
+def tail(n: int = 20) -> list:
+    """Return the last n records from the audit log."""
+    try:
+        if not _AUDIT_FILE.exists():
+            return []
+        lines = _AUDIT_FILE.read_text(encoding="utf-8").splitlines()
+        return [json.loads(ln) for ln in lines[-n:] if ln.strip()]
+    except Exception:
+        return []
 
-    Returns a dict suitable for JSON serialisation.
-    """
-    if not audit_log_path.exists():
-        return {"error": f"Audit log not found: {audit_log_path}"}
 
-    entries: list[dict] = []
-    with audit_log_path.open("r", encoding="utf-8") as log:
-        for line in log:
-            line = line.strip()
-            if line:
+def summary() -> Dict[str, Any]:
+    """Return aggregate stats across the entire audit log."""
+    try:
+        if not _AUDIT_FILE.exists():
+            return {"total_scans": 0, "total_findings": 0, "total_blocked": 0}
+        records = []
+        for ln in _AUDIT_FILE.read_text(encoding="utf-8").splitlines():
+            if ln.strip():
                 try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
+                    records.append(json.loads(ln))
+                except Exception:
+                    pass
+        detector_totals: Dict[str, int] = {}
+        blocked = 0
+        total_findings = 0
+        for r in records:
+            total_findings += r.get("findings_count", 0)
+            if r.get("blocked"):
+                blocked += 1
+            for det, cnt in r.get("findings", {}).items():
+                detector_totals[det] = detector_totals.get(det, 0) + cnt
+        return {
+            "total_scans": len(records),
+            "total_findings": total_findings,
+            "total_blocked": blocked,
+            "top_detectors": dict(
+                sorted(detector_totals.items(), key=lambda x: -x[1])[:10]
+            ),
+            "audit_file": str(_AUDIT_FILE),
+        }
+    except Exception:
+        return {}
 
-    if not entries:
-        return {"total_scans": 0, "message": "No entries in audit log."}
 
-    total_scans = len(entries)
-    total_findings = sum(e.get("findings_count", 0) for e in entries)
-    total_blocked = sum(1 for e in entries if e.get("blocked"))
-
-    detector_totals: dict[str, int] = {}
-    for entry in entries:
-        for det, count in entry.get("detector_counts", {}).items():
-            detector_totals[det] = detector_totals.get(det, 0) + count
-
-    users: dict[str, int] = {}
-    for entry in entries:
-        user = entry.get("user", "unknown")
-        users[user] = users.get(user, 0) + 1
-
-    blocked_by_totals: dict[str, int] = {}
-    for entry in entries:
-        for det in entry.get("blocked_by", []):
-            blocked_by_totals[det] = blocked_by_totals.get(det, 0) + 1
-
-    first_ts = entries[0].get("ts", "")
-    last_ts = entries[-1].get("ts", "")
-
-    return {
-        "period": {"from": first_ts, "to": last_ts},
-        "total_scans": total_scans,
-        "total_findings": total_findings,
-        "total_blocked": total_blocked,
-        "block_rate_pct": round(100 * total_blocked / total_scans, 1) if total_scans else 0,
-        "detector_totals": dict(sorted(detector_totals.items(), key=lambda x: x[1], reverse=True)),
-        "blocked_by_totals": dict(
-            sorted(blocked_by_totals.items(), key=lambda x: x[1], reverse=True)
-        ),
-        "scans_by_user": dict(sorted(users.items(), key=lambda x: x[1], reverse=True)),
-        "entries": total_scans,
-    }
+def export_csv(out_path: str) -> int:
+    """Export audit log to CSV. Returns number of rows written."""
+    import csv
+    records_list = []
+    if _AUDIT_FILE.exists():
+        for ln in _AUDIT_FILE.read_text(encoding="utf-8").splitlines():
+            if ln.strip():
+                try:
+                    records_list.append(json.loads(ln))
+                except Exception:
+                    pass
+    if not records_list:
+        return 0
+    fieldnames = ["ts", "op", "source", "policy_mode", "findings_count",
+                  "blocked", "masked_values_count", "session_id", "version"]
+    with open(out_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(records_list)
+    return len(records_list)

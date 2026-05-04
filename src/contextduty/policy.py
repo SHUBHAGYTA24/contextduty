@@ -30,7 +30,48 @@ class Policy:
 
 DEFAULT_POLICY: dict[str, Any] = {
     "mode": "redact",
-    "detectors": ["email", "phone", "api_key", "aws_key", "bearer_token"],
+    "detectors": [
+        # PII
+        "email",
+        "phone",
+        # Generic tokens
+        "api_key",
+        "bearer_token",
+        # Cloud provider keys
+        "aws_key",
+        "aws_secret",
+        "gcp_service_account",
+        # VCS platform tokens
+        "github_pat",
+        # AI / ML service keys
+        "openai_key",
+        "anthropic_key",
+        "huggingface_token",
+        # Communication platforms
+        "slack_token",
+        # Payment / SaaS platforms
+        "stripe_webhook",
+        "sendgrid_key",
+        "mailchimp_key",
+        # Package registries
+        "npm_token",
+        # Telephony
+        "twilio_sid",
+        # Azure
+        "azure_storage_key",
+        # Google OAuth
+        "google_oauth_token",
+        # Database connection strings
+        "db_dsn",
+        # Cryptographic material
+        "ssh_private_key",
+        "pgp_private_key",
+        "private_key_pem",
+        # JWTs
+        "jwt",
+        # .env / config file secrets
+        "env_secret",
+    ],
     "custom_detectors": {},
     "detector_modes": {},
     "allow_patterns": {},

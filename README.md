@@ -48,15 +48,74 @@ For structured secrets and API keys — the most common AI workflow leaks — Co
 
 ## Detection coverage
 
-| Detector | Example input | Masked as |
-|---|---|---|
-| `email` | `jane@corp.com` | `<EMAIL_a1b2c3d4e5>` |
-| `phone` | `+1 415-555-1212` | `<PHONE_f6g7h8i9j0>` |
-| `api_key` | `sk_live_ABC123...` | `<API_KEY_k1l2m3n4o5>` |
-| `aws_key` | `AKIA1234567890ABCDEF` | `<AWS_KEY_p6q7r8s9t0>` |
-| `bearer_token` | `Bearer eyJhbGci...` | `<BEARER_TOKEN_u1v2w3x4y5>` |
+25 built-in detectors across 8 categories, all enabled by default.
 
-Masks are **deterministic** — the same value always produces the same mask, so you can correlate across log lines without exposing the raw value.
+### PII
+
+| Detector | Catches |
+|---|---|
+| `email` | `jane@corp.com` |
+| `phone` | `+1 415-555-1212` |
+
+### Generic tokens
+
+| Detector | Catches |
+|---|---|
+| `api_key` | `sk_live_…`, `rk_…`, `pk_…` (Stripe-style underscore keys) |
+| `bearer_token` | `Bearer eyJhbGci…` |
+
+### Cloud provider keys
+
+| Detector | Catches |
+|---|---|
+| `aws_key` | `AKIA…` (AWS Access Key ID) |
+| `aws_secret` | `AWS_SECRET_ACCESS_KEY=…` in env files / config |
+| `gcp_service_account` | `"type": "service_account"` in GCP JSON key blobs |
+| `google_oauth_token` | `ya29.…` Google OAuth access tokens |
+
+### VCS platform tokens
+
+| Detector | Catches |
+|---|---|
+| `github_pat` | `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…`, `github_pat_…` |
+
+### AI / ML service keys
+
+| Detector | Catches |
+|---|---|
+| `openai_key` | `sk-…` and `sk-proj-…` OpenAI API keys |
+| `anthropic_key` | `sk-ant-…` Anthropic API keys |
+| `huggingface_token` | `hf_…` HuggingFace tokens |
+
+### Communication & SaaS platforms
+
+| Detector | Catches |
+|---|---|
+| `slack_token` | `xoxb-…`, `xoxp-…`, `xoxa-…`, `xoxs-…`, `xapp-…` |
+| `stripe_webhook` | `whsec_…` Stripe webhook signing secrets |
+| `sendgrid_key` | `SG.….…` SendGrid API keys |
+| `mailchimp_key` | `<32-hex>-us<n>` Mailchimp API keys |
+| `npm_token` | `npm_…` npm automation tokens |
+| `twilio_sid` | `AC<32-hex>` Twilio Account SIDs |
+| `azure_storage_key` | Azure storage connection strings (`DefaultEndpointsProtocol=…`) |
+
+### Database connection strings
+
+| Detector | Catches |
+|---|---|
+| `db_dsn` | `postgres://user:pass@host`, `mysql://…`, `mongodb://…`, `redis://…`, etc. — only matches DSNs that embed credentials |
+
+### Cryptographic material
+
+| Detector | Catches |
+|---|---|
+| `ssh_private_key` | `-----BEGIN RSA/EC/DSA/OPENSSH PRIVATE KEY-----` |
+| `pgp_private_key` | `-----BEGIN PGP PRIVATE KEY BLOCK-----` |
+| `private_key_pem` | `-----BEGIN PRIVATE KEY-----` (PKCS#8) |
+| `jwt` | Three-part base64url tokens starting with `eyJ` |
+| `env_secret` | `PASSWORD=…`, `SECRET_KEY=…`, `API_KEY=…`, `ACCESS_TOKEN=…`, etc. in config files |
+
+Masks are **deterministic** — the same value always produces the same mask token, so you can correlate findings across log lines and audit trails without ever exposing the raw secret.
 
 ---
 
@@ -139,12 +198,22 @@ Exposed tools:
 
 ## Policy file
 
-Default `.contextduty.json`:
+Default `.contextduty.json` (all 25 built-in detectors are enabled out of the box):
 
 ```json
 {
   "mode": "redact",
-  "detectors": ["email", "phone", "api_key", "aws_key", "bearer_token"],
+  "detectors": [
+    "email", "phone",
+    "api_key", "bearer_token",
+    "aws_key", "aws_secret", "gcp_service_account", "google_oauth_token",
+    "github_pat",
+    "openai_key", "anthropic_key", "huggingface_token",
+    "slack_token", "stripe_webhook", "sendgrid_key", "mailchimp_key",
+    "npm_token", "twilio_sid", "azure_storage_key",
+    "db_dsn",
+    "ssh_private_key", "pgp_private_key", "private_key_pem", "jwt", "env_secret"
+  ],
   "custom_detectors": {}
 }
 ```
@@ -200,7 +269,7 @@ Ready-made baselines for SOC 2 and HIPAA — extend them in your own policy file
 
 | Pack | File | Detectors included |
 |---|---|---|
-| SOC 2 | `policies/soc2-baseline.json` | email, phone, api_key, aws_key, bearer_token |
+| SOC 2 | `policies/soc2-baseline.json` | email, phone, api_key, aws_key, bearer_token, github_pat, openai_key, db_dsn, jwt |
 | HIPAA | `policies/hipaa-baseline.json` | email, phone + SSN, NPI, DEA, ICD-10, MRN |
 
 Usage:
@@ -242,8 +311,12 @@ bash demo/demo.sh
 ## Roadmap
 
 - [x] PyPI publish (`pip install contextduty`)
+- [x] 25 built-in detectors across 8 categories (AWS, GCP, GitHub, OpenAI, Anthropic, Slack, DB DSNs, crypto material, and more)
 - [ ] Directory scanning (`contextduty scan src/`)
-- [ ] Presidio integration as optional NLP backend
+- [ ] `contextduty install-hook` — one command installs the pre-push git hook
+- [ ] `contextduty scan-history` — scan git history for already-committed secrets
+- [ ] Audit log (`~/.contextduty/audit.jsonl`) for compliance trail
+- [ ] Presidio integration as optional NLP backend for names/locations
 
 Have an idea? [Open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues).
 

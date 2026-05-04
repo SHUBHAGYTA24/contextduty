@@ -46,7 +46,7 @@ lint:
 # ── test ──────────────────────────────────────────────────────────────────────
 test:
 	@echo "$(BOLD)→ Running tests...$(RESET)"
-	pytest --tb=short -q
+	PYTHONPATH=src pytest --tb=short -q
 	@echo "$(GREEN)✓ Tests passed$(RESET)"
 
 # ── check (full pre-push gate) ────────────────────────────────────────────────

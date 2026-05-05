@@ -42,6 +42,7 @@ Changelog = "https://github.com/SHUBHAGYTA24/contextduty/blob/main/CHANGELOG.md"
 [project.scripts]
 contextduty = "contextduty.cli:main"
 contextduty-mcp = "contextduty.mcp_server:main"
+contextduty-dashboard = "contextduty.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -59,3 +60,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
+
+[tool.ruff.lint.per-file-ignores]
+# dashboard.py embeds raw HTML/CSS/JS — long lines inside string literals are unavoidable
+"src/contextduty/dashboard.py" = ["E501"]

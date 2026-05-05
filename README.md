@@ -1,6 +1,7 @@
 # ContextDuty
 
-> A policy-driven context firewall for AI workflows. Scan and redact sensitive data before prompts, logs, or traces leave your environment — locally, with no cloud calls.
+> **Policy-driven context firewall for AI workflows.**  
+> Catches secrets and PII before they reach an LLM — at the git commit, in MCP tool results, and in CI. Local-first, zero dependencies, no data leaves your environment.
 
 [![PyPI version](https://img.shields.io/pypi/v/contextduty.svg)](https://pypi.org/project/contextduty/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -10,25 +11,56 @@
 
 ---
 
-> **Status: early alpha — built over a weekend, rough edges expected.**
-> Works end-to-end. Not yet battle-tested in production. Ideas, issues,
-> and PRs very welcome.
+> **Status: early alpha — built over a weekend, rough edges expected.**  
+> Works end-to-end. Ideas, issues, and PRs very welcome.
 
 ---
 
-## Why ContextDuty
+## Demo — Pre-commit hook catches LLM API keys before they enter git history
 
-AI coding assistants and agent workflows are spreading fast. So is accidental data leakage — API keys, emails, and PII flowing into prompts, logs, and traces that may be stored or sent to third-party services.
+![ContextDuty pre-commit hook demo](demo/hook-demo.svg)
 
-ContextDuty is a **local-first, policy-layered firewall** that sits at the exact moment data moves from your environment into an LLM — before it is too late.
-
-- **CLI** — pipe files through it in CI or pre-commit hooks
-- **MCP server** — Cursor, VS Code, and any MCP client get automatic interception
-- **Policy inheritance** — teams extend org-wide baselines without copying rules
+Developer stages `llm_config.py` containing an Anthropic key, OpenAI key, and database DSN. The pre-commit hook blocks the commit instantly. After `contextduty redact`, the clean version commits with deterministic mask tokens — **zero secrets in git history**.
 
 ---
 
-## Why not Presidio?
+## Audit Dashboard
+
+```bash
+contextduty dashboard --demo   # synthetic data, no log needed
+contextduty dashboard          # reads ~/.contextduty/audit.jsonl
+```
+
+![ContextDuty audit dashboard](demo/dashboard-preview.png)
+
+Zero-dependency local web UI — dark theme, findings by detector, 30-day timeline, blocked-commits tracker, developer activity, CSV export. All data stays on your machine.
+
+---
+
+## Why ContextDuty — not an LLM gateway
+
+**LLM gateways** (LiteLLM, Portkey, Helicone) and **MCP gateways** are inference-layer proxies — they intercept the API call *after* a prompt has been assembled and sent over the wire. They can't catch a secret that's already in git history, already in a staged file, or already assembled into a context window.
+
+ContextDuty enforces at three earlier layers that no gateway touches:
+
+| Enforcement layer | LLM / MCP Gateway | ContextDuty |
+|---|---|---|
+| Source file / git pre-commit | ❌ | ✅ |
+| MCP tool result (before context window) | ❌ | ✅ |
+| CI/CD pipeline (before merge) | ❌ | ✅ |
+| Runtime API call inspection | ✅ | ✅ (via MCP server) |
+| In-process, no proxy hop, zero latency | ❌ (network RTT) | ✅ |
+| Air-gap / regulated environment safe | ❌ | ✅ |
+| Policy-as-code in your repo | ❌ | ✅ (`.contextduty.json`) |
+| Your data sent to third-party infra | Yes | Never |
+
+> *Gateways guard the inference call. ContextDuty guards everything upstream of it — the code, the repo, the tool results, the context assembly — where secrets actually originate.*
+
+---
+
+## Why ContextDuty — not Presidio
+
+
 
 Presidio is a data pipeline tool — it processes documents after the fact, and its MCP wrapper [explicitly warns](https://github.com/Szowesgad/mcp-server-presidio) that by the time it runs, the LLM has already seen your data. ContextDuty is an enforcement primitive **at the prompt boundary**, which is where leakage actually occurs.
 
@@ -143,11 +175,19 @@ contextduty redact --in /tmp/test.txt --out /tmp/clean.txt
 cat /tmp/clean.txt
 ```
 
-Or run the full demo:
+Or run the full five-act demo (scan → redact → pre-commit hook → MCP):
 
 ```bash
 git clone https://github.com/SHUBHAGYTA24/contextduty
-cd contextduty && bash demo/demo.sh
+cd contextduty
+pip install -e ".[dev]"
+PYTHONPATH=src bash demo/real_demo.sh
+```
+
+Open the audit dashboard with synthetic data:
+
+```bash
+contextduty dashboard --demo
 ```
 
 ---
@@ -159,6 +199,8 @@ cd contextduty && bash demo/demo.sh
 | `contextduty init` | Create `.contextduty.json` in the current directory |
 | `contextduty scan <file>` | Scan file, print JSON findings report |
 | `contextduty redact --in <f> --out <f>` | Redact matches, write clean file |
+| `contextduty dashboard [--demo] [--port N]` | Open local audit dashboard in browser |
+| `contextduty report --audit-log <f>` | Print JSON summary of an audit log |
 | `contextduty policy validate --policy <f> [--strict]` | Validate and resolve a layered policy |
 | `contextduty --version` | Print installed version |
 

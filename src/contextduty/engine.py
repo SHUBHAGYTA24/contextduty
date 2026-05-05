@@ -65,17 +65,28 @@ def _apply_findings(
     detector_counts: dict[str, int],
     blocked_detectors: set[str],
 ) -> str:
-    """Apply per-detector mode logic to a text segment. Returns the (possibly redacted) text."""
+    """Apply per-detector mode logic to a text segment. Returns the (possibly redacted) text.
+
+    Findings are processed longest-value-first so that specific long patterns (e.g. a full
+    Slack bot token) take precedence over short patterns (e.g. the phone detector matching
+    the numeric segments inside the same token).
+    """
     updated = text
-    for finding in findings:
+    already_masked: set[str] = set()
+    for finding in sorted(findings, key=lambda f: len(f.value), reverse=True):
         if _is_allowed(finding.value, finding.detector, policy):
+            continue
+        # Skip if a longer pattern already replaced this exact value
+        if finding.value in already_masked or finding.value not in updated:
             continue
         detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
         mode = _effective_mode(policy, finding.detector)
         if mode == "block":
             blocked_detectors.add(finding.detector)
         elif mode == "redact":
-            updated = updated.replace(finding.value, stable_mask(finding.detector, finding.value))
+            mask = stable_mask(finding.detector, finding.value)
+            updated = updated.replace(finding.value, mask)
+            already_masked.add(finding.value)
         # mode == "warn": count it, don't mask, don't block
     return updated
 

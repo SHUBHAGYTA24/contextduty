@@ -327,11 +327,9 @@ Masks are **deterministic**: `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5
 
 ---
 
-## Why not LLM gateways or MCP gateways?
+## How ContextDuty fits with LLM gateways and MCP gateways
 
-LLM gateways (Portkey, LiteLLM, Helicone) and MCP gateways intercept at the **inference call** — after the prompt has been assembled and sent over the wire. They cannot catch a secret already in git history, already in a staged file, or already assembled into a context window by Cursor.
-
-ContextDuty enforces earlier, at the layers where leakage actually originates:
+LLM gateways (Portkey, LiteLLM, Helicone) and MCP gateways are excellent for rate limiting, cost tracking, model routing, and runtime observability. ContextDuty is complementary — it enforces at the layers **upstream** of the inference call, where leakage originates before a gateway ever sees the traffic.
 
 | Enforcement layer | LLM/MCP Gateway | ContextDuty |
 |---|---|---|
@@ -343,15 +341,15 @@ ContextDuty enforces earlier, at the layers where leakage actually originates:
 | Air-gap / regulated environment | ❌ | ✅ |
 | Your data sent to third-party infra | Yes | Never |
 
-> *Gateways guard the inference call. ContextDuty guards everything upstream of it.*
+> *Gateways guard the inference call. ContextDuty guards everything upstream of it — the two work best together.*
 
 ---
 
-## Why not Presidio?
+## How ContextDuty fits with Presidio
 
-Presidio is a detection library — it tells you what PII exists, enforcement is your problem. It has no git hooks, no block mode, no audit log, no CI integration. Its MCP wrapper explicitly notes the LLM has already seen the data by the time Presidio runs.
+Presidio is a powerful PII detection library, excellent at identifying names, locations, and unstructured personal data using NLP models. ContextDuty is complementary — it focuses on structured secrets (API keys, tokens, DSNs) and adds the enforcement layer that Presidio doesn't include: git hooks, block mode, CI/CD integration, and a policy-as-code system.
 
-ContextDuty is the enforcement shell. Presidio integration (for name/location NLP detection) is on the roadmap.
+Think of Presidio as the detector and ContextDuty as the enforcement shell. Presidio integration for name/location NLP detection is on the ContextDuty roadmap.
 
 ---
 

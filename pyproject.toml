@@ -65,3 +65,5 @@ select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 [tool.ruff.lint.per-file-ignores]
 # dashboard.py embeds raw HTML/CSS/JS — long lines inside string literals are unavoidable
 "src/contextduty/dashboard.py" = ["E501"]
+# demo.py has long inline strings for terminal output — splitting them hurts readability
+"src/contextduty/demo.py" = ["E501"]

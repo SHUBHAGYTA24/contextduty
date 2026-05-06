@@ -58,6 +58,7 @@ def _fake_config() -> str:
         'SUPPORT_EMAIL = "admin@yourcompany.com"\n'
     )
 
+
 _FAKE_FIXTURE = """\
 # tests/fixtures/customers.json
 [

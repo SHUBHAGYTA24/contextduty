@@ -117,6 +117,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     uninstall_parser.add_argument("--repo", default=".", help="Path to the git repository root.")
 
+    # ── demo ──────────────────────────────────────────────────────────────────
+    subparsers.add_parser(
+        "demo",
+        help="Run an interactive demo — catches a fake secret in under 20 seconds.",
+    )
+
     # ── report ────────────────────────────────────────────────────────────────
     report_parser = subparsers.add_parser(
         "report",
@@ -280,6 +286,12 @@ def main() -> None:  # noqa: C901
             print(json.dumps(payload, indent=2))
             return
         raise SystemExit(1)
+
+    if args.command == "demo":
+        from .demo import run_demo
+
+        run_demo()
+        return
 
     raise SystemExit(1)
 

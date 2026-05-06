@@ -1,7 +1,7 @@
 # ContextDuty
 
-> **Policy-driven context firewall for AI workflows.**  
-> Catches secrets and PII before they reach an LLM — at the git commit, in MCP tool results, and in CI. Local-first, zero dependencies, no data leaves your environment.
+> **Stop secrets from reaching AI tools — before the prompt is assembled.**  
+> Pre-commit hook. MCP interception. CI/CD enforcement. Local-first, zero dependencies.
 
 [![PyPI version](https://img.shields.io/pypi/v/contextduty.svg)](https://pypi.org/project/contextduty/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -11,210 +11,129 @@
 
 ---
 
-> **Status: early alpha — built over a weekend, rough edges expected.**  
-> Works end-to-end. Ideas, issues, and PRs very welcome.
+## See it in 20 seconds
 
----
-
-## Demo — Pre-commit hook catches LLM API keys before they enter git history
-
-![ContextDuty pre-commit hook demo](demo/hook-demo.svg)
-
-Developer stages `llm_config.py` containing an Anthropic key, OpenAI key, and database DSN. The pre-commit hook blocks the commit instantly. After `contextduty redact`, the clean version commits with deterministic mask tokens — **zero secrets in git history**.
-
----
-
-## Audit Dashboard
-
-```bash
-contextduty dashboard --demo   # synthetic data, no log needed
-contextduty dashboard          # reads ~/.contextduty/audit.jsonl
+```
+pip install contextduty
+contextduty demo
 ```
 
-![ContextDuty audit dashboard](demo/dashboard-preview.png)
+```
+▶ Scene 1 — Developer creates config.py with real credentials
 
-Zero-dependency local web UI — dark theme, findings by detector, 30-day timeline, blocked-commits tracker, developer activity, CSV export. All data stays on your machine.
+  DATABASE_URL = "postgresql://admin:Sup3rS3cr3t!@prod-db.internal:5432/customers"
+  AWS_ACCESS_KEY_ID     = "AKIAIOSFODNN7EXAMPLE"
+  OPENAI_API_KEY = "sk-proj-EXAMPLEcontextdutyDEMO..."
+  STRIPE_SECRET_KEY = "sk_live_EXAMPLE..."
 
----
+▶ Scene 2 — Scanning config.py
 
-## Why ContextDuty — not an LLM gateway
+  {
+    "findings_count": 6,
+    "detector_counts": {
+      "db_dsn": 1,
+      "aws_key": 1,
+      "aws_secret": 1,
+      "openai_key": 1,
+      "api_key": 1,
+      "email": 1
+    }
+  }
 
-**LLM gateways** (LiteLLM, Portkey, Helicone) and **MCP gateways** are inference-layer proxies — they intercept the API call *after* a prompt has been assembled and sent over the wire. They can't catch a secret that's already in git history, already in a staged file, or already assembled into a context window.
+▶ Scene 3 — Redacting config.py (safe to pass to AI)
 
-ContextDuty enforces at three earlier layers that no gateway touches:
+  DATABASE_URL = "<DB_DSN_33213ab6f0>"
+  AWS_ACCESS_KEY_ID     = "<AWS_KEY_1a5d44a2dc>"
+  OPENAI_API_KEY = "<OPENAI_KEY_5f04681e46>"
+  STRIPE_SECRET_KEY = "<API_KEY_242fa29ccc>"
 
-| Enforcement layer | LLM / MCP Gateway | ContextDuty |
-|---|---|---|
-| Source file / git pre-commit | ❌ | ✅ |
-| MCP tool result (before context window) | ❌ | ✅ |
-| CI/CD pipeline (before merge) | ❌ | ✅ |
-| Runtime API call inspection | ✅ | ✅ (via MCP server) |
-| In-process, no proxy hop, zero latency | ❌ (network RTT) | ✅ |
-| Air-gap / regulated environment safe | ❌ | ✅ |
-| Policy-as-code in your repo | ❌ | ✅ (`.contextduty.json`) |
-| Your data sent to third-party infra | Yes | Never |
+✓ Real values replaced with deterministic masks — safe to paste into any AI tool
 
-> *Gateways guard the inference call. ContextDuty guards everything upstream of it — the code, the repo, the tool results, the context assembly — where secrets actually originate.*
+▶ Scene 4 — Pre-commit hook blocks the commit
 
----
+  $ git add config.py && git commit -m 'add config'
 
-## Why ContextDuty — not Presidio
+  [ContextDuty] BLOCKED: config.py
+    aws_key: 1 finding(s)
+    openai_key: 1 finding(s)
 
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  ContextDuty blocked this commit.                           ║
+  ║  Sensitive values were found in staged files.               ║
+  ╚══════════════════════════════════════════════════════════════╝
 
+✓ Commit rejected — secrets never entered git history
 
-Presidio is a data pipeline tool — it processes documents after the fact, and its MCP wrapper [explicitly warns](https://github.com/Szowesgad/mcp-server-presidio) that by the time it runs, the LLM has already seen your data. ContextDuty is an enforcement primitive **at the prompt boundary**, which is where leakage actually occurs.
+▶ Scene 5 — Directory scan finds PII in test fixtures
 
-| | ContextDuty | Presidio |
-|---|---|---|
-| Intercepts before LLM sees data | ✅ | ❌ (LLM calls it as a tool — data already sent) |
-| Person names, locations (NLP) | ❌ | ✅ |
-| Structured secrets and API keys | ✅ | ✅ |
-| MCP enforcement layer | ✅ | ❌ |
-| Policy layering + `block` mode | ✅ | ❌ |
-| Zero dependencies, instant startup | ✅ | ❌ (downloads spaCy model) |
-| Deterministic, auditable masks | ✅ | ❌ (ML confidence scores vary) |
+  $ contextduty scan tests/
 
-For structured secrets and API keys — the most common AI workflow leaks — ContextDuty catches them with zero latency and full auditability. For unstructured PII like names and locations, Presidio's ML recognizers are the right tool. They are complementary, not competing, and Presidio integration is on the roadmap.
+  {
+    "findings_count": 4,
+    "detector_counts": {"email": 3, "phone": 1},
+    "files_scanned": 1
+  }
 
----
-
-## Detection coverage
-
-25 built-in detectors across 8 categories, all enabled by default.
-
-### PII
-
-| Detector | Catches |
-|---|---|
-| `email` | `jane@corp.com` |
-| `phone` | `+1 415-555-1212` |
-
-### Generic tokens
-
-| Detector | Catches |
-|---|---|
-| `api_key` | `sk_live_…`, `rk_…`, `pk_…` (Stripe-style underscore keys) |
-| `bearer_token` | `Bearer eyJhbGci…` |
-
-### Cloud provider keys
-
-| Detector | Catches |
-|---|---|
-| `aws_key` | `AKIA…` (AWS Access Key ID) |
-| `aws_secret` | `AWS_SECRET_ACCESS_KEY=…` in env files / config |
-| `gcp_service_account` | `"type": "service_account"` in GCP JSON key blobs |
-| `google_oauth_token` | `ya29.…` Google OAuth access tokens |
-
-### VCS platform tokens
-
-| Detector | Catches |
-|---|---|
-| `github_pat` | `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…`, `github_pat_…` |
-
-### AI / ML service keys
-
-| Detector | Catches |
-|---|---|
-| `openai_key` | `sk-…` and `sk-proj-…` OpenAI API keys |
-| `anthropic_key` | `sk-ant-…` Anthropic API keys |
-| `huggingface_token` | `hf_…` HuggingFace tokens |
-
-### Communication & SaaS platforms
-
-| Detector | Catches |
-|---|---|
-| `slack_token` | `xoxb-…`, `xoxp-…`, `xoxa-…`, `xoxs-…`, `xapp-…` |
-| `stripe_webhook` | `whsec_…` Stripe webhook signing secrets |
-| `sendgrid_key` | `SG.….…` SendGrid API keys |
-| `mailchimp_key` | `<32-hex>-us<n>` Mailchimp API keys |
-| `npm_token` | `npm_…` npm automation tokens |
-| `twilio_sid` | `AC<32-hex>` Twilio Account SIDs |
-| `azure_storage_key` | Azure storage connection strings (`DefaultEndpointsProtocol=…`) |
-
-### Database connection strings
-
-| Detector | Catches |
-|---|---|
-| `db_dsn` | `postgres://user:pass@host`, `mysql://…`, `mongodb://…`, `redis://…`, etc. — only matches DSNs that embed credentials |
-
-### Cryptographic material
-
-| Detector | Catches |
-|---|---|
-| `ssh_private_key` | `-----BEGIN RSA/EC/DSA/OPENSSH PRIVATE KEY-----` |
-| `pgp_private_key` | `-----BEGIN PGP PRIVATE KEY BLOCK-----` |
-| `private_key_pem` | `-----BEGIN PRIVATE KEY-----` (PKCS#8) |
-| `jwt` | Three-part base64url tokens starting with `eyJ` |
-| `env_secret` | `PASSWORD=…`, `SECRET_KEY=…`, `API_KEY=…`, `ACCESS_TOKEN=…`, etc. in config files |
-
-Masks are **deterministic** — the same value always produces the same mask token, so you can correlate findings across log lines and audit trails without ever exposing the raw secret.
+⚠ 4 PII values found — if Cursor indexes this directory, all of it goes to OpenAI
+```
 
 ---
 
-## Quickstart
+## The problem it solves
+
+Your developers use Cursor, GitHub Copilot, and Claude every day. These tools **automatically pull context** from your codebase — every open file, config, test fixture. No copy-paste required. The developer asks "why is this function slow?" and Cursor silently sends `config.py`, `.env.local`, and `tests/fixtures/customers.json` to OpenAI as context.
+
+If those files contain secrets or customer data:
+
+- The enterprise agreement with OpenAI says they won't **train** on your data. It says nothing about what happens if OpenAI is breached.
+- HIPAA and PCI-DSS don't have a "we didn't know" exemption. The fine lands on you.
+- There is zero audit trail. You cannot prove it happened or didn't happen.
+
+ContextDuty intercepts at three layers **before** data reaches any AI tool.
+
+---
+
+## Install
 
 ```bash
 pip install contextduty
-contextduty init
-```
-
-Try it immediately:
-
-```bash
-cat > /tmp/test.txt << 'EOF'
-From: priya@healthtech.com
-Auth: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig
-AWS Key: AKIA1234567890ABCDEF
-API: sk_live_9Xk2mPqRvL8nJwTdYcBe3F
-Phone: +1 415-555-1212
-Error: SMTP timeout on port 587
-EOF
-
-contextduty scan /tmp/test.txt
-contextduty redact --in /tmp/test.txt --out /tmp/clean.txt
-cat /tmp/clean.txt
-```
-
-Or run the full five-act demo (scan → redact → pre-commit hook → MCP):
-
-```bash
-git clone https://github.com/SHUBHAGYTA24/contextduty
-cd contextduty
-pip install -e ".[dev]"
-PYTHONPATH=src bash demo/real_demo.sh
-```
-
-Open the audit dashboard with synthetic data:
-
-```bash
-contextduty dashboard --demo
 ```
 
 ---
 
-## Commands
+## Layer 1 — Pre-commit hook
 
-| Command | Description |
-|---|---|
-| `contextduty init` | Create `.contextduty.json` in the current directory |
-| `contextduty scan <file>` | Scan file, print JSON findings report |
-| `contextduty redact --in <f> --out <f>` | Redact matches, write clean file |
-| `contextduty dashboard [--demo] [--port N]` | Open local audit dashboard in browser |
-| `contextduty report --audit-log <f>` | Print JSON summary of an audit log |
-| `contextduty policy validate --policy <f> [--strict]` | Validate and resolve a layered policy |
-| `contextduty --version` | Print installed version |
+Scans every staged file before `git commit` completes. Blocks if secrets are found.
+
+```bash
+contextduty install-hooks
+```
+
+```
+$ git add config.py
+$ git commit -m "add deployment config"
+
+[ContextDuty] BLOCKED: config.py
+  aws_key: 1 finding(s)
+  openai_key: 1 finding(s)
+  → aws_key is set to block mode
+
+╔══════════════════════════════════════════════════════════════╗
+║  ContextDuty blocked this commit.                           ║
+║  Remove or redact them before committing.                   ║
+║  To redact: contextduty redact --in config.py --out config.py ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+The secret never enters git history. Cursor can never index it. OpenAI can never receive it.
 
 ---
 
-## MCP server (Cursor / VS Code / any MCP client)
+## Layer 2 — MCP interception (Cursor / Claude / VS Code)
 
-ContextDuty runs as an MCP stdio server — drop it into your editor config and every file your agent touches is scanned **before** it reaches the LLM.
+ContextDuty runs as an MCP server. When an AI agent fetches a file or database result, ContextDuty intercepts the response and redacts it before the agent sees it.
 
-```bash
-contextduty-mcp
-```
-
-**Cursor** — add to `~/.cursor/mcp.json`:
+Add to `~/.cursor/mcp.json`:
 
 ```json
 {
@@ -226,116 +145,224 @@ contextduty-mcp
 }
 ```
 
-Exposed tools:
+Add to `~/.claude/claude_desktop_config.json` for Claude Desktop:
 
-| Tool | Arguments | Use case |
-|---|---|---|
-| `contextduty_scan_text` | `text`, optional `policyPath` | Scan an in-memory string — **use this for prompt interception** |
-| `contextduty_scan` | `path`, optional `policyPath` | Scan a file on disk |
-| `contextduty_redact` | `inputPath`, `outputPath`, optional `policyPath` | Redact a file on disk |
+```json
+{
+  "mcpServers": {
+    "contextduty": {
+      "command": "contextduty-mcp"
+    }
+  }
+}
+```
 
-> `contextduty_scan_text` is the primary tool for MCP use. It intercepts the prompt string before the LLM receives it — not after.
+The agent calls your tools. ContextDuty intercepts what they return:
+
+```
+Agent: read_file("customers.json")
+Tool returns: {"name": "Jane Smith", "ssn": "123-45-6789", "email": "jane@example.com"}
+ContextDuty intercepts →
+Agent receives: {"name": "<PERSON_a3f2>", "ssn": "<SSN_b7c1>", "email": "<EMAIL_d4e5>"}
+```
+
+The real values never enter the prompt. Never reach OpenAI.
 
 ---
 
-## Policy file
+## Layer 3 — CI/CD (blocks merge if secrets slip through)
 
-Default `.contextduty.json` (all 25 built-in detectors are enabled out of the box):
+```yaml
+# .github/workflows/contextduty.yml
+- name: ContextDuty scan
+  run: |
+    pip install contextduty
+    contextduty scan src/ --policy .contextduty.json
+```
+
+Add `"mode": "block"` to your policy and the pipeline exits non-zero on any finding. PR cannot merge.
+
+---
+
+## Scan and redact
+
+```bash
+# Scan a file — get a JSON findings report
+contextduty scan config.py
+
+# Scan an entire directory recursively
+contextduty scan src/
+
+# Redact a file — replace secrets with deterministic masks
+contextduty redact --in config.py --out config.safe.py
+
+# The same secret always gets the same mask — auditable, correlatable
+# AKIAIOSFODNN7EXAMPLE → <AWS_KEY_1a5d44a2dc> (always, everywhere)
+```
+
+---
+
+## Audit dashboard
+
+```bash
+contextduty dashboard --demo    # try it now with synthetic data
+contextduty dashboard           # reads ~/.contextduty/audit.jsonl
+```
+
+![ContextDuty audit dashboard](demo/dashboard-preview.png)
+
+Local web UI. Dark theme. Findings by detector, 30-day timeline, blocked commits tracker, developer activity table, CSV export. Zero dependencies, no external services. All data stays on your machine.
+
+---
+
+## Policy
+
+Create `.contextduty.json` in your repo root:
+
+```bash
+contextduty init
+```
 
 ```json
 {
   "mode": "redact",
   "detectors": [
     "email", "phone",
-    "api_key", "bearer_token",
-    "aws_key", "aws_secret", "gcp_service_account", "google_oauth_token",
+    "aws_key", "aws_secret",
+    "openai_key", "anthropic_key",
     "github_pat",
-    "openai_key", "anthropic_key", "huggingface_token",
-    "slack_token", "stripe_webhook", "sendgrid_key", "mailchimp_key",
-    "npm_token", "twilio_sid", "azure_storage_key",
-    "db_dsn",
-    "ssh_private_key", "pgp_private_key", "private_key_pem", "jwt", "env_secret"
+    "db_dsn", "bearer_token", "jwt",
+    "stripe_webhook", "slack_token"
   ],
   "custom_detectors": {}
 }
 ```
 
-**Add a custom detector without touching code:**
+**Three modes:**
+
+| Mode | What happens |
+|---|---|
+| `redact` | Replace matched values with deterministic masks |
+| `warn` | Log findings, don't block, don't change content |
+| `block` | Exit non-zero — use in CI or pre-commit to enforce hard stops |
+
+**Per-detector modes** — e.g. block on API keys but warn on emails:
 
 ```json
 {
-  "mode": "redact",
-  "detectors": ["email"],
-  "custom_detectors": {
-    "employee_id": "\\bEMP-[0-9]{6}\\b",
-    "internal_ticket": "\\bTICKET-[A-Z]{3}-[0-9]{4}\\b"
+  "mode": "warn",
+  "detector_modes": {
+    "aws_key": "block",
+    "openai_key": "block",
+    "anthropic_key": "block"
   }
 }
 ```
 
-`custom_detectors` are auto-enabled — just add the regex entry.
+**Custom detectors** — add your own regex, no code changes needed:
 
-**Policy layering for teams and enterprises:**
+```json
+{
+  "custom_detectors": {
+    "employee_id": "\\bEMP-[0-9]{6}\\b",
+    "patient_mrn": "\\bMRN-[0-9]{8}\\b"
+  }
+}
+```
+
+**Allow patterns** — whitelist known-safe values:
+
+```json
+{
+  "allow_patterns": {
+    "email": ["@example\\.com$", "@testdata\\.internal$"]
+  }
+}
+```
+
+**Policy layering** — team baseline + repo override:
 
 ```json
 {
   "extends": "../../policies/org-baseline.json",
   "mode": "block",
-  "detectors": ["internal_ticket"],
-  "custom_detectors": {
-    "internal_ticket": "\\bTICKET-[A-Z]{3}-[0-9]{4}\\b"
+  "detector_modes": {
+    "email": "warn"
   }
 }
 ```
 
-Rules:
-- `extends` can be a string or list (relative file paths)
-- `detectors` are merged (parent + child)
-- `custom_detectors` are merged (child overrides same key)
-- `mode` is overridden by the child policy
-- Cycles in `extends` are rejected with a clear error
+---
 
-**Modes:**
+## Detection coverage — 25 built-in detectors
 
-| Mode | Behaviour |
+| Category | Detectors |
 |---|---|
-| `redact` | Replace matched values with deterministic masks |
-| `warn` | Report findings, do not change content |
-| `block` | Exit non-zero if findings exist (CI enforcement) |
+| PII | `email`, `phone` |
+| Generic tokens | `api_key`, `bearer_token` |
+| Cloud | `aws_key`, `aws_secret`, `gcp_service_account`, `google_oauth_token` |
+| VCS | `github_pat` |
+| AI/ML services | `openai_key`, `anthropic_key`, `huggingface_token` |
+| SaaS | `slack_token`, `stripe_webhook`, `sendgrid_key`, `mailchimp_key`, `npm_token`, `twilio_sid`, `azure_storage_key` |
+| Databases | `db_dsn` (postgres, mysql, mongodb, redis — only when credentials embedded) |
+| Crypto material | `ssh_private_key`, `pgp_private_key`, `private_key_pem`, `jwt`, `env_secret` |
+
+Masks are **deterministic**: `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5d44a2dc>` — same value, same mask, everywhere. Audit logs stay correlatable without ever storing raw secrets.
 
 ---
 
-## Compliance policy packs
+## Commands
 
-Ready-made baselines for SOC 2 and HIPAA — extend them in your own policy file:
+| Command | Description |
+|---|---|
+| `contextduty demo` | Interactive 5-scene demo — see it catch secrets in real time |
+| `contextduty scan <file\|dir>` | Scan file or directory, print JSON findings |
+| `contextduty redact --in <f> --out <f>` | Redact file, write clean copy |
+| `contextduty install-hooks` | Install pre-commit hook in current git repo |
+| `contextduty uninstall-hooks` | Remove the hook |
+| `contextduty dashboard [--demo]` | Open local audit dashboard in browser |
+| `contextduty report --audit-log <f>` | Summarise an audit log |
+| `contextduty policy validate` | Validate and resolve a layered policy file |
+| `contextduty init` | Create default `.contextduty.json` |
 
-| Pack | File | Detectors included |
+---
+
+## How ContextDuty fits with LLM gateways and MCP gateways
+
+LLM gateways (Portkey, LiteLLM, Helicone) and MCP gateways are excellent for rate limiting, cost tracking, model routing, and runtime observability. ContextDuty is complementary — it enforces at the layers **upstream** of the inference call, where leakage originates before a gateway ever sees the traffic.
+
+| Enforcement layer | LLM/MCP Gateway | ContextDuty |
 |---|---|---|
-| SOC 2 | `policies/soc2-baseline.json` | email, phone, api_key, aws_key, bearer_token, github_pat, openai_key, db_dsn, jwt |
-| HIPAA | `policies/hipaa-baseline.json` | email, phone + SSN, NPI, DEA, ICD-10, MRN |
+| Git pre-commit (before history) | ❌ | ✅ |
+| MCP tool result (before context window) | ❌ | ✅ |
+| CI/CD (before merge) | ❌ | ✅ |
+| Runtime API call | ✅ | ✅ |
+| Runs locally, no proxy hop | ❌ | ✅ |
+| Air-gap / regulated environment | ❌ | ✅ |
+| Your data sent to third-party infra | Yes | Never |
 
-Usage:
+> *Gateways guard the inference call. ContextDuty guards everything upstream of it — the two work best together.*
+
+---
+
+## How ContextDuty fits with Presidio
+
+Presidio is a powerful PII detection library, excellent at identifying names, locations, and unstructured personal data using NLP models. ContextDuty is complementary — it focuses on structured secrets (API keys, tokens, DSNs) and adds the enforcement layer that Presidio doesn't include: git hooks, block mode, CI/CD integration, and a policy-as-code system.
+
+Think of Presidio as the detector and ContextDuty as the enforcement shell. Presidio integration for name/location NLP detection is on the ContextDuty roadmap.
+
+---
+
+## Compliance
+
+Ready-made policy baselines:
 
 ```json
-{
-  "extends": "policies/soc2-baseline.json",
-  "mode": "block"
-}
+{ "extends": "policies/soc2-baseline.json", "mode": "block" }
+{ "extends": "policies/hipaa-baseline.json", "mode": "block" }
 ```
 
----
-
-## CI integration
-
-Use `block` mode to fail a pipeline if secrets are found in a specific file:
-
-```yaml
-# .github/workflows/contextduty.yml
-- name: Scan for secrets
-  run: |
-    pip install contextduty
-    contextduty scan src/my_module.py --policy .contextduty.json
-```
+The JSONL audit log ContextDuty writes contains timestamp, operation, target, findings count, detector names, and whether the scan was blocked — but **never raw secret values**. That log is what you show auditors.
 
 ---
 
@@ -344,34 +371,27 @@ Use `block` mode to fail a pipeline if secrets are found in a specific file:
 ```bash
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
-make install    # pip install -e ".[dev]"
-make check      # fmt + lint + tests — run before every push
-bash demo/demo.sh
+pip install -e ".[dev]"
+make check    # format + lint + 199 tests
 ```
 
 ---
+
 ## Roadmap
 
-- [x] PyPI publish (`pip install contextduty`)
-- [x] 25 built-in detectors across 8 categories (AWS, GCP, GitHub, OpenAI, Anthropic, Slack, DB DSNs, crypto material, and more)
-- [ ] Directory scanning (`contextduty scan src/`)
-- [ ] `contextduty install-hook` — one command installs the pre-push git hook
-- [ ] `contextduty scan-history` — scan git history for already-committed secrets
-- [ ] Audit log (`~/.contextduty/audit.jsonl`) for compliance trail
-- [ ] Presidio integration as optional NLP backend for names/locations
-
-Have an idea? [Open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues).
+- [x] 25 built-in detectors
+- [x] Pre-commit hook (`contextduty install-hooks`)
+- [x] MCP server (Cursor, Claude, VS Code)
+- [x] Directory scanning (`contextduty scan src/`)
+- [x] Audit dashboard (`contextduty dashboard`)
+- [x] Per-detector modes and allow patterns
+- [x] Policy layering with `extends`
+- [x] Interactive demo (`contextduty demo`)
+- [ ] VS Code / Cursor extension (workspace pre-flight scanner)
+- [ ] Local HTTPS proxy (intercepts Cursor/Copilot native context)
+- [ ] Presidio integration for name/location NLP detection
+- [ ] PyPI publish
 
 ---
 
-## Open source
-
-| File | Purpose |
-|---|---|
-| `LICENSE` | MIT |
-| `SECURITY.md` | Vulnerability reporting |
-| `CONTRIBUTING.md` | How to contribute |
-| `CODE_OF_CONDUCT.md` | Community standards |
-| `CHANGELOG.md` | Version history |
-
-Issues, PRs, and policy pack contributions are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+Issues and PRs welcome. [Open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues) if a detector is missing or misfiring.

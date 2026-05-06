@@ -1,8 +1,9 @@
 """Tests for the scanning and redaction engine."""
 
 from __future__ import annotations
+from pathlib import Path
 
-from contextduty.engine import scan_text
+from contextduty.engine import scan_dir, scan_text
 from contextduty.policy import Policy
 
 
@@ -127,3 +128,61 @@ def test_scan_text_multiline():
     assert result.scan.findings_count == 2
     assert result.scan.detector_counts["email"] == 1
     assert result.scan.detector_counts["aws_key"] == 1
+
+
+# ---------------------------------------------------------------------------
+# scan_dir — directory scanning
+# ---------------------------------------------------------------------------
+
+
+def test_scan_dir_single_file(tmp_path):
+    f = tmp_path / "config.py"
+    f.write_text('OPENAI_KEY = "sk-EXAMPLEcontextdutyDEMOkeyXXXXXXXXXXXXXXXXXXXXXXXX"\n')
+    policy = Policy(mode="redact", detectors={"openai_key"}, custom_detectors={})
+    result = scan_dir(f, policy)
+    assert result.findings_count == 1
+
+
+def test_scan_dir_multiple_files(tmp_path):
+    (tmp_path / "a.py").write_text('KEY = "sk-EXAMPLEcontextdutyDEMOkeyXXXXXXXXXXXXXXXXXXXXXXXX"\n')
+    (tmp_path / "b.py").write_text('EMAIL = "user@example.com"\n')
+    (tmp_path / "clean.py").write_text("x = 1\n")
+    policy = Policy(mode="redact", detectors={"openai_key", "email"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy)
+    assert result.findings_count == 2
+    assert len(result.files_scanned) == 3  # all .py files walked
+
+
+def test_scan_dir_skips_binary_extensions(tmp_path):
+    (tmp_path / "img.png").write_bytes(b"\x89PNG\r\n")
+    (tmp_path / "clean.py").write_text("x = 1\n")
+    policy = Policy(mode="redact", detectors={"email"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy)
+    assert "img.png" not in str(result.files_scanned)
+
+
+def test_scan_dir_recursive(tmp_path):
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "nested.py").write_text('KEY = "sk-EXAMPLEcontextdutyDEMOkeyXXXXXXXXXXXXXXXXXXXXXXXX"\n')
+    policy = Policy(mode="redact", detectors={"openai_key"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy, recursive=True)
+    assert result.findings_count == 1
+
+
+def test_scan_dir_non_recursive_misses_nested(tmp_path):
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "nested.py").write_text('KEY = "sk-EXAMPLEcontextdutyDEMOkeyXXXXXXXXXXXXXXXXXXXXXXXX"\n')
+    policy = Policy(mode="redact", detectors={"openai_key"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy, recursive=False)
+    assert result.findings_count == 0
+
+
+def test_scan_dir_blocked_aggregated(tmp_path):
+    (tmp_path / "a.py").write_text('KEY = "AKIAIOSFODNN7EXAMPLE"\n')
+    (tmp_path / "b.py").write_text('KEY2 = "AKIAIOSFODNN7EXAMPLE"\n')
+    policy = Policy(mode="block", detectors={"aws_key"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy)
+    assert result.blocked is True
+    assert "aws_key" in result.blocked_by

@@ -4,9 +4,21 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
+
+# Extensions treated as binary — skipped during directory scans
+_BINARY_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg",
+    ".pdf", ".zip", ".gz", ".tar", ".bz2", ".xz", ".7z", ".rar",
+    ".exe", ".dll", ".so", ".dylib", ".bin", ".whl", ".egg",
+    ".pyc", ".pyo", ".pyd",
+    ".mp3", ".mp4", ".wav", ".avi", ".mov",
+    ".ttf", ".otf", ".woff", ".woff2",
+    ".db", ".sqlite", ".sqlite3",
+    ".lock",  # dependency lock files are rarely human-readable secrets
+}
 
 from .detectors import DETECTORS, Detector, stable_mask
 from .policy import Policy
@@ -25,6 +37,8 @@ class ScanResult:
     blocked: bool
     # Detectors that triggered a block (subset of detector_counts keys).
     blocked_by: list[str] = None  # type: ignore[assignment]
+    # Files scanned (populated by scan_dir; empty for single-file scans).
+    files_scanned: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.blocked_by is None:
@@ -111,6 +125,46 @@ def scan_file(path: Path, policy: Policy) -> ScanResult:
     )
 
 
+def scan_dir(root: Path, policy: Policy, recursive: bool = True) -> ScanResult:
+    """Scan every text file under *root* and return a combined ScanResult.
+
+    Skips binary files (by extension) and files that cannot be decoded as UTF-8.
+    If *root* is a file, delegates to scan_file().
+    """
+    if root.is_file():
+        return scan_file(root, policy)
+
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a file or directory")
+
+    glob = root.rglob("*") if recursive else root.glob("*")
+    all_paths = sorted(p for p in glob if p.is_file())
+
+    combined_counts: dict[str, int] = {}
+    combined_blocked: set[str] = set()
+    files_scanned: list[str] = []
+
+    for path in all_paths:
+        if path.suffix.lower() in _BINARY_EXTENSIONS:
+            continue
+        try:
+            result = scan_file(path, policy)
+        except (OSError, UnicodeDecodeError):
+            continue
+        files_scanned.append(str(path))
+        for det, count in result.detector_counts.items():
+            combined_counts[det] = combined_counts.get(det, 0) + count
+        combined_blocked.update(result.blocked_by)
+
+    return ScanResult(
+        findings_count=sum(combined_counts.values()),
+        detector_counts=combined_counts,
+        blocked=bool(combined_blocked),
+        blocked_by=sorted(combined_blocked),
+        files_scanned=files_scanned,
+    )
+
+
 def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
@@ -180,4 +234,9 @@ def report_to_json(result: ScanResult) -> str:
         "blocked": result.blocked,
         "blocked_by": result.blocked_by,
     }
+    if result.files_scanned:
+        payload["files_scanned"] = len(result.files_scanned)
+        payload["files_with_findings"] = [
+            f for f in result.files_scanned
+        ]
     return json.dumps(payload, indent=2)

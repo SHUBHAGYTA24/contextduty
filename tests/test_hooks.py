@@ -203,3 +203,40 @@ def test_cli_uninstall_hooks_nothing_to_remove(tmp_path):
     result = run("uninstall-hooks", "--repo", str(tmp_path))
     assert result.returncode == 0
     assert "nothing" in result.stdout.lower()
+
+
+# ---------------------------------------------------------------------------
+# Shell injection fix — paths with spaces and special chars
+# ---------------------------------------------------------------------------
+
+
+def test_install_hook_policy_path_with_spaces(tmp_path):
+    """Policy path with spaces must be shell-quoted in the hook script."""
+    _make_git_repo(tmp_path)
+    spaced_policy = "/tmp/my policy file.json"
+    hook_path = install_git_hook(tmp_path, policy_path=spaced_policy)
+    content = hook_path.read_text()
+    # shlex.quote wraps the path in single quotes
+    assert "'/tmp/my policy file.json'" in content
+
+
+def test_install_hook_audit_log_path_with_spaces(tmp_path):
+    """Audit log path with spaces must be shell-quoted in the hook script."""
+    _make_git_repo(tmp_path)
+    spaced_log = "/var/log/my audit log/audit.jsonl"
+    hook_path = install_git_hook(tmp_path, audit_log=spaced_log)
+    content = hook_path.read_text()
+    assert "'/var/log/my audit log/audit.jsonl'" in content
+
+
+def test_install_hook_policy_path_with_single_quote(tmp_path):
+    """Policy path containing a single quote must be safely escaped."""
+    _make_git_repo(tmp_path)
+    tricky_path = "/tmp/user's policy.json"
+    hook_path = install_git_hook(tmp_path, policy_path=tricky_path)
+    content = hook_path.read_text()
+    # shlex.quote escapes single quotes as '"'"'
+    assert tricky_path not in content or "'" not in content.split(tricky_path)[0][-1:]
+    # Hook content must not contain unquoted path with raw single quote
+    import shlex
+    assert shlex.quote(tricky_path) in content

@@ -19,6 +19,7 @@ the hooks definition at .pre-commit-hooks.yaml.
 
 from __future__ import annotations
 
+import shlex
 import stat
 import sys
 from pathlib import Path
@@ -173,8 +174,8 @@ def install_git_hook(
             )
 
     hook_content = _HOOK_TEMPLATE.format(
-        policy=policy_path,
-        audit_log=audit_log,
+        policy=shlex.quote(str(policy_path)),
+        audit_log=shlex.quote(str(audit_log)) if audit_log else "",
     )
 
     hook_path.write_text(hook_content, encoding="utf-8")

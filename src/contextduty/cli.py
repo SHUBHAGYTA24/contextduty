@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .audit import generate_report, write_audit_entry
 from .dashboard import DEFAULT_LOG, DEFAULT_PORT
-from .engine import redact_file, report_to_json, scan_file
+from .engine import redact_file, report_to_json, scan_dir, scan_file
 from .policy import load_policy, unknown_detector_names, write_default_policy
 
 _AUDIT_LOG_HELP = (
@@ -156,7 +156,8 @@ def main() -> None:  # noqa: C901
 
     if args.command == "scan":
         policy_ref, policy = _load_policy_with_fallback(args.policy)
-        result = scan_file(Path(args.target), policy)
+        target = Path(args.target)
+        result = scan_dir(target, policy) if target.is_dir() else scan_file(target, policy)
         report = report_to_json(result)
         print(report)
         if args.report:

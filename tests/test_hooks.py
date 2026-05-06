@@ -239,4 +239,5 @@ def test_install_hook_policy_path_with_single_quote(tmp_path):
     assert tricky_path not in content or "'" not in content.split(tricky_path)[0][-1:]
     # Hook content must not contain unquoted path with raw single quote
     import shlex
+
     assert shlex.quote(tricky_path) in content

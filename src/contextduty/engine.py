@@ -8,20 +8,50 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-# Extensions treated as binary — skipped during directory scans
-_BINARY_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg",
-    ".pdf", ".zip", ".gz", ".tar", ".bz2", ".xz", ".7z", ".rar",
-    ".exe", ".dll", ".so", ".dylib", ".bin", ".whl", ".egg",
-    ".pyc", ".pyo", ".pyd",
-    ".mp3", ".mp4", ".wav", ".avi", ".mov",
-    ".ttf", ".otf", ".woff", ".woff2",
-    ".db", ".sqlite", ".sqlite3",
-    ".lock",  # dependency lock files are rarely human-readable secrets
-}
-
 from .detectors import DETECTORS, Detector, stable_mask
 from .policy import Policy
+
+# Extensions treated as binary — skipped during directory scans
+_BINARY_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".svg",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".tar",
+    ".bz2",
+    ".xz",
+    ".7z",
+    ".rar",
+    ".exe",
+    ".dll",
+    ".so",
+    ".dylib",
+    ".bin",
+    ".whl",
+    ".egg",
+    ".pyc",
+    ".pyo",
+    ".pyd",
+    ".mp3",
+    ".mp4",
+    ".wav",
+    ".avi",
+    ".mov",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".lock",  # dependency lock files are rarely human-readable secrets
+}
 
 
 @dataclass(frozen=True)
@@ -236,7 +266,5 @@ def report_to_json(result: ScanResult) -> str:
     }
     if result.files_scanned:
         payload["files_scanned"] = len(result.files_scanned)
-        payload["files_with_findings"] = [
-            f for f in result.files_scanned
-        ]
+        payload["files_with_findings"] = [f for f in result.files_scanned]
     return json.dumps(payload, indent=2)

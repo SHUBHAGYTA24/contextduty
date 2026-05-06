@@ -1,7 +1,6 @@
 """Tests for the scanning and redaction engine."""
 
 from __future__ import annotations
-from pathlib import Path
 
 from contextduty.engine import scan_dir, scan_text
 from contextduty.policy import Policy

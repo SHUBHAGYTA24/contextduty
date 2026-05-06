@@ -13,9 +13,8 @@ from .engine import redact_file, report_to_json, scan_file
 from .policy import load_policy, unknown_detector_names, write_default_policy
 
 _AUDIT_LOG_HELP = (
-    "Append a structured JSONL audit entry to this file after every scan. "
-    "Entries never include matched values — only finding counts and detector names. "
-    "Example: --audit-log /var/log/contextduty/audit.jsonl"
+    "Append a structured JSONL audit entry after every scan. "
+    "Entries never include matched values — only finding counts and detector names."
 )
 
 
@@ -28,18 +27,18 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # init
+    # ── init ──────────────────────────────────────────────────────────────────
     init_parser = subparsers.add_parser("init", help="Create default policy file.")
     init_parser.add_argument("--path", default=".contextduty.json", help="Policy output path.")
 
-    # scan
+    # ── scan ──────────────────────────────────────────────────────────────────
     scan_parser = subparsers.add_parser("scan", help="Scan a text file for risky data.")
     scan_parser.add_argument("target", help="Input file path.")
     scan_parser.add_argument("--policy", default=".contextduty.json", help="Policy path.")
     scan_parser.add_argument("--report", help="Optional report output JSON path.")
     scan_parser.add_argument("--audit-log", dest="audit_log", help=_AUDIT_LOG_HELP)
 
-    # redact
+    # ── redact ────────────────────────────────────────────────────────────────
     redact_parser = subparsers.add_parser("redact", help="Redact risky data from an input file.")
     redact_parser.add_argument("--in", dest="input_path", required=True, help="Input file path.")
     redact_parser.add_argument("--out", dest="output_path", required=True, help="Output file path.")
@@ -47,7 +46,7 @@ def _parser() -> argparse.ArgumentParser:
     redact_parser.add_argument("--report", help="Optional report output JSON path.")
     redact_parser.add_argument("--audit-log", dest="audit_log", help=_AUDIT_LOG_HELP)
 
-    # policy
+    # ── policy ────────────────────────────────────────────────────────────────
     policy_parser = subparsers.add_parser("policy", help="Policy operations.")
     policy_subparsers = policy_parser.add_subparsers(dest="policy_command", required=True)
     validate_parser = policy_subparsers.add_parser(
@@ -89,7 +88,36 @@ def _parser() -> argparse.ArgumentParser:
         help="Don't open the browser automatically.",
     )
 
-    # report
+    # ── install-hooks ─────────────────────────────────────────────────────────
+    hooks_parser = subparsers.add_parser(
+        "install-hooks",
+        help="Install a git pre-commit hook that scans staged files before every commit.",
+    )
+    hooks_parser.add_argument(
+        "--policy",
+        default=".contextduty.json",
+        help="Policy path written into the hook script.",
+    )
+    hooks_parser.add_argument(
+        "--audit-log",
+        dest="audit_log",
+        default="",
+        help="Audit log path the hook will append to (optional).",
+    )
+    hooks_parser.add_argument(
+        "--repo",
+        default=".",
+        help="Path to the git repository root. Defaults to current directory.",
+    )
+
+    # ── uninstall-hooks ───────────────────────────────────────────────────────
+    uninstall_parser = subparsers.add_parser(
+        "uninstall-hooks",
+        help="Remove the ContextDuty pre-commit hook.",
+    )
+    uninstall_parser.add_argument("--repo", default=".", help="Path to the git repository root.")
+
+    # ── report ────────────────────────────────────────────────────────────────
     report_parser = subparsers.add_parser(
         "report",
         help="Summarise an audit log produced with --audit-log.",
@@ -116,7 +144,7 @@ def _load_policy_with_fallback(policy_path: str) -> tuple[Path | None, object]:
     return None, load_policy(None)
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
     parser = _parser()
     args = parser.parse_args()
 
@@ -177,6 +205,41 @@ def main() -> None:
         )
         return
 
+    if args.command == "install-hooks":
+        from .hooks import install_git_hook
+
+        try:
+            hook_path = install_git_hook(
+                Path(args.repo),
+                policy_path=args.policy,
+                audit_log=args.audit_log,
+            )
+            print(f"✓ Pre-commit hook installed at {hook_path}")
+            print(f"  Policy : {args.policy}")
+            if args.audit_log:
+                print(f"  Audit  : {args.audit_log}")
+            print("")
+            print("Staged files will be scanned before every commit.")
+            print("To uninstall: contextduty uninstall-hooks")
+        except (FileNotFoundError, RuntimeError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+
+    if args.command == "uninstall-hooks":
+        from .hooks import uninstall_git_hook
+
+        try:
+            removed = uninstall_git_hook(Path(args.repo))
+            if removed:
+                print("✓ ContextDuty pre-commit hook removed.")
+            else:
+                print("No ContextDuty pre-commit hook found — nothing to remove.")
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        return
+
     if args.command == "report":
         summary = generate_report(Path(args.audit_log))
         output = json.dumps(summary, indent=2)
@@ -203,7 +266,7 @@ def main() -> None:
                 "detectors": sorted(policy.detectors),
                 "custom_detectors": sorted(policy.custom_detectors.keys()),
                 "detector_modes": policy.detector_modes,
-                "allow_patterns": {k: v for k, v in policy.allow_patterns.items()},
+                "allow_patterns": dict(policy.allow_patterns),
             }
             if args.strict:
                 unknown = unknown_detector_names(policy)

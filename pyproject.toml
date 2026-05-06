@@ -43,6 +43,7 @@ Changelog = "https://github.com/SHUBHAGYTA24/contextduty/blob/main/CHANGELOG.md"
 contextduty = "contextduty.cli:main"
 contextduty-mcp = "contextduty.mcp_server:main"
 contextduty-dashboard = "contextduty.cli:main"
+contextduty-pre-commit = "contextduty.hooks:main_pre_commit"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

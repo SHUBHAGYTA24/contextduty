@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .audit import generate_report, write_audit_entry
+from .dashboard import DEFAULT_LOG, DEFAULT_PORT
 from .engine import redact_file, report_to_json, scan_file
 from .policy import load_policy, unknown_detector_names, write_default_policy
 
@@ -56,6 +57,35 @@ def _parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Fail validation when unknown detector names are present.",
+    )
+
+    # dashboard
+    dash_parser = subparsers.add_parser(
+        "dashboard",
+        help="Open the local audit-log dashboard in your browser.",
+    )
+    dash_parser.add_argument(
+        "--audit-log",
+        dest="audit_log",
+        default=str(DEFAULT_LOG),
+        help=f"Path to the JSONL audit log (default: {DEFAULT_LOG}).",
+    )
+    dash_parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"Local port to serve on (default: {DEFAULT_PORT}).",
+    )
+    dash_parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Load synthetic demo data even if a real log file exists.",
+    )
+    dash_parser.add_argument(
+        "--no-open",
+        dest="no_open",
+        action="store_true",
+        help="Don't open the browser automatically.",
     )
 
     # ── install-hooks ─────────────────────────────────────────────────────────
@@ -162,6 +192,17 @@ def main() -> None:  # noqa: C901
         if result.blocked:
             print(f"BLOCKED by policy ({policy_ref or 'default'})", file=sys.stderr)
             raise SystemExit(2)
+        return
+
+    if args.command == "dashboard":
+        from .dashboard import serve
+
+        serve(
+            audit_log=Path(args.audit_log),
+            port=args.port,
+            demo=args.demo,
+            open_browser=not args.no_open,
+        )
         return
 
     if args.command == "install-hooks":

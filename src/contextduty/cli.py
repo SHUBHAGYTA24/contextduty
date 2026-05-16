@@ -123,6 +123,39 @@ def _parser() -> argparse.ArgumentParser:
         help="Run an interactive demo — catches a fake secret in under 20 seconds.",
     )
 
+    # ── proxy ─────────────────────────────────────────────────────────────────
+    proxy_parser = subparsers.add_parser(
+        "proxy",
+        help="Local HTTPS proxy — intercepts AI API traffic and redacts secrets.",
+    )
+    proxy_sub = proxy_parser.add_subparsers(dest="proxy_command", required=True)
+
+    # proxy setup
+    ps = proxy_sub.add_parser("setup", help="Install CA cert + configure system proxy (one-time).")
+    ps.add_argument("--policy", default=".contextduty.json", help="Policy file path.")
+    ps.add_argument("--audit-log", dest="audit_log", default="", help="Audit log path.")
+
+    # proxy start
+    pst = proxy_sub.add_parser("start", help="Start intercepting AI API traffic.")
+    pst.add_argument(
+        "--policy", default=None, help="Policy file (default: from setup or .contextduty.json)."
+    )
+    pst.add_argument("--audit-log", dest="audit_log", default="", help="Audit log path.")
+    pst.add_argument("--port", type=int, default=8080, help="Proxy port (default: 8080).")
+    pst.add_argument(
+        "--set-system-proxy",
+        dest="set_system_proxy",
+        action="store_true",
+        help="Automatically configure macOS system proxy settings.",
+    )
+    pst.add_argument("--daemon", action="store_true", help="Run in background.")
+
+    # proxy stop
+    proxy_sub.add_parser("stop", help="Stop the proxy and restore system settings.")
+
+    # proxy status
+    proxy_sub.add_parser("status", help="Show proxy status.")
+
     # ── report ────────────────────────────────────────────────────────────────
     report_parser = subparsers.add_parser(
         "report",
@@ -292,6 +325,27 @@ def main() -> None:  # noqa: C901
 
         run_demo()
         return
+
+    if args.command == "proxy":
+        from .proxy import proxy_setup, proxy_start, proxy_status, proxy_stop
+
+        if args.proxy_command == "setup":
+            raise SystemExit(proxy_setup(args.policy, args.audit_log))
+        if args.proxy_command == "start":
+            raise SystemExit(
+                proxy_start(
+                    policy_path=args.policy,
+                    audit_log=args.audit_log,
+                    port=args.port,
+                    set_system_proxy=args.set_system_proxy,
+                    daemon=args.daemon,
+                )
+            )
+        if args.proxy_command == "stop":
+            raise SystemExit(proxy_stop())
+        if args.proxy_command == "status":
+            raise SystemExit(proxy_status())
+        raise SystemExit(1)
 
     raise SystemExit(1)
 

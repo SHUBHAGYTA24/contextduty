@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "contextduty"
-version = "0.1.0"
+version = "0.2.0"
 description = "Policy-driven context firewall for AI workflows — scan and redact sensitive data before prompts, logs, or traces leave your environment."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,8 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+proxy = ["mitmproxy>=10.0"]
+all = ["mitmproxy>=10.0"]
 
 [project.urls]
 Homepage = "https://github.com/SHUBHAGYTA24/contextduty"
@@ -63,7 +65,9 @@ target-version = "py310"
 select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 
 [tool.ruff.lint.per-file-ignores]
-# dashboard.py embeds raw HTML/CSS/JS — long lines inside string literals are unavoidable
 "src/contextduty/dashboard.py" = ["E501"]
-# demo.py has long inline strings for terminal output — splitting them hurts readability
 "src/contextduty/demo.py" = ["E501"]
+"src/contextduty/proxy.py" = ["E501"]
+"src/contextduty/proxy_addon.py" = ["E501"]
+"src/contextduty/cli.py" = ["E501"]
+"tests/test_proxy_addon.py" = ["E501"]

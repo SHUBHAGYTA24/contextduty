@@ -70,12 +70,18 @@ def _apply_findings(
     policy: Policy,
     detector_counts: dict[str, int],
     blocked_detectors: set[str],
+    redact_blocked: bool = False,
 ) -> str:
     """Apply per-detector mode logic to a text segment. Returns the (possibly redacted) text.
 
     Findings are processed longest-value-first so that specific long patterns (e.g. a full
     Slack bot token) take precedence over short patterns (e.g. the phone detector matching
     the numeric segments inside the same token).
+
+    Args:
+        redact_blocked: When True (used by redact_file), block-mode detectors also have their
+            values masked in the output. When False (used by scan), block-mode values are left
+            in place and only flagged.
     """
     updated = text
     already_masked: set[str] = set()
@@ -89,6 +95,10 @@ def _apply_findings(
         mode = _effective_mode(policy, finding.detector)
         if mode == "block":
             blocked_detectors.add(finding.detector)
+            if redact_blocked:
+                mask = stable_mask(finding.detector, finding.value)
+                updated = updated.replace(finding.value, mask)
+                already_masked.add(finding.value)
         elif mode == "redact":
             mask = stable_mask(finding.detector, finding.value)
             updated = updated.replace(finding.value, mask)
@@ -168,7 +178,9 @@ def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResu
     ):
         for line in source:
             findings = _scan_line(line, detectors)
-            updated = _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
+            updated = _apply_findings(
+                line, findings, policy, detector_counts, blocked_detectors, redact_blocked=True
+            )
             target.write(updated)
 
     findings_count = sum(detector_counts.values())

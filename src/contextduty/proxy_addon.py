@@ -47,6 +47,12 @@ _PROMPT_PATHS = {
     "/v1/engines",
 }
 
+# Hosts that use the legacy extract/inject path (well-tested OpenAI/Anthropic format).
+# All other hosts use the declarative interceptor which handles arbitrary JSON structures.
+_LEGACY_HOSTS = frozenset(
+    {"api.openai.com", "api.anthropic.com", "copilot.github.com", "api.githubcopilot.com"}
+)
+
 
 def _is_prompt_request(host: str, path: str) -> bool:
     if host not in AI_HOSTS:
@@ -155,14 +161,17 @@ class ContextDutyAddon:
 
     def __init__(self, policy_path: str | None = None, audit_log: str | None = None):
         from .engine import scan_text
+        from .interceptor import redact_body
         from .policy import load_policy
 
         self._scan_text = scan_text
+        self._redact_body = redact_body
         policy_file = Path(policy_path) if policy_path else Path(".contextduty.json")
         self.policy = load_policy(policy_file if policy_file.exists() else None)
         self.audit_log = Path(audit_log) if audit_log else None
         self._findings_total = 0
         self._requests_intercepted = 0
+        self._use_interceptor = True  # Use declarative field walker
 
     def request(self, flow) -> None:  # mitmproxy.http.HTTPFlow
         host = flow.request.host
@@ -182,11 +191,76 @@ class ContextDutyAddon:
         except (ValueError, UnicodeDecodeError):
             return
 
-        texts = _extract_texts(body, host)
-        if not texts:
+        self._requests_intercepted += 1
+
+        # Use the declarative interceptor for Cursor and other non-standard APIs.
+        # Falls back to legacy extract/inject for backward compat.
+        if self._use_interceptor and ("cursor" in host or host not in _LEGACY_HOSTS):
+            self._handle_with_interceptor(flow, body, host)
+        else:
+            self._handle_legacy(flow, body, host)
+
+    def _handle_with_interceptor(self, flow, body: dict, host: str) -> None:
+        """Use the declarative field walker (interceptor.py) — works for any AI tool."""
+        policy = self.policy
+
+        def scan_fn(text: str):
+            return self._scan_text(text, policy)
+
+        total_findings, all_detector_counts, blocked = self._redact_body(body, host, scan_fn)
+
+        self._findings_total += total_findings
+        self._emit_feed(host, total_findings, all_detector_counts, blocked)
+
+        if total_findings == 0:
+            return  # clean
+
+        if blocked:
+            log.warning(
+                "[ContextDuty] BLOCKED request to %s — %d finding(s): %s",
+                host,
+                total_findings,
+                ", ".join(f"{k}:{v}" for k, v in all_detector_counts.items()),
+            )
+            flow.response = _block_response()
+            self._write_audit(
+                "proxy_intercept", host, total_findings, all_detector_counts, blocked=True
+            )
             return
 
-        self._requests_intercepted += 1
+        # warn mode — don't modify body
+        if policy.mode == "warn" and not any(
+            policy.detector_modes.get(d) == "redact" for d in all_detector_counts
+        ):
+            log.info(
+                "[ContextDuty] WARN request to %s — %d finding(s)",
+                host,
+                total_findings,
+            )
+            self._write_audit(
+                "proxy_intercept", host, total_findings, all_detector_counts, blocked=False
+            )
+            return
+
+        # Body was redacted in-place by redact_body
+        flow.request.set_text(json.dumps(body))
+        log.info(
+            "[ContextDuty] Redacted request to %s — %d finding(s): %s",
+            host,
+            total_findings,
+            ", ".join(f"{k}:{v}" for k, v in all_detector_counts.items()),
+        )
+        self._write_audit(
+            "proxy_intercept", host, total_findings, all_detector_counts, blocked=False
+        )
+
+    def _handle_legacy(self, flow, body: dict, host: str) -> None:
+        """Legacy path — uses _extract_texts/_inject_texts for OpenAI/Anthropic."""
+        texts = _extract_texts(body, host)
+        if not texts:
+            self._emit_feed(host, 0, {}, False)
+            return
+
         total_findings = 0
         blocked = False
         all_detector_counts: dict[str, int] = {}
@@ -202,6 +276,7 @@ class ContextDutyAddon:
                 blocked = True
 
         self._findings_total += total_findings
+        self._emit_feed(host, total_findings, all_detector_counts, blocked)
 
         if total_findings == 0:
             return  # clean — forward unchanged
@@ -247,6 +322,27 @@ class ContextDutyAddon:
         self._write_audit(
             "proxy_intercept", host, total_findings, all_detector_counts, blocked=False
         )
+
+    def _emit_feed(
+        self,
+        host: str,
+        findings: int,
+        detector_counts: dict[str, int],
+        blocked: bool,
+    ) -> None:
+        """Emit a live feed event (visible in terminal when proxy runs foreground)."""
+        try:
+            from .feed import record_interception
+
+            if blocked:
+                action = "blocked"
+            elif findings > 0:
+                action = "redacted"
+            else:
+                action = "clean"
+            record_interception(host, action, findings, detector_counts)
+        except Exception:
+            pass  # feed is optional — never break interception
 
     def _write_audit(
         self,

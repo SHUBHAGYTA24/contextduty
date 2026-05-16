@@ -35,7 +35,10 @@ def test_prompt_request_cursor():
 
 
 def test_prompt_request_google_gemini():
-    assert _is_prompt_request("generativelanguage.googleapis.com", "/v1/models/gemini:generate") is True
+    assert (
+        _is_prompt_request("generativelanguage.googleapis.com", "/v1/models/gemini:generate")
+        is True
+    )
 
 
 def test_prompt_request_embeddings_skipped():
@@ -196,6 +199,11 @@ def _make_addon(mode: str = "redact"):
     addon.audit_log = None
     addon._findings_total = 0
     addon._requests_intercepted = 0
+    addon._use_interceptor = True
+
+    from contextduty.interceptor import redact_body
+
+    addon._redact_body = redact_body
     return addon
 
 

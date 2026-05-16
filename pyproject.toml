@@ -74,4 +74,7 @@ select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 "src/contextduty/protect.py" = ["E501"]
 "tests/test_proxy_addon.py" = ["E501"]
 "tests/test_protect.py" = ["E501"]
+"src/contextduty/interceptor.py" = ["E501"]
+"src/contextduty/feed.py" = ["E501"]
+"tests/test_interceptor.py" = ["E501"]
 "tests/test_cursor.py" = ["E501"]

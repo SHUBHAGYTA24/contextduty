@@ -87,7 +87,7 @@ DETECTORS: list[Detector] = [
     # ── Email / marketing ─────────────────────────────────────────────────────
     Detector(
         "sendgrid_key",
-        re.compile(r"\bSG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}\b"),
+        re.compile(r"\bSG\.[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\b"),
     ),
     Detector(
         "mailchimp_key",

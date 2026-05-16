@@ -35,8 +35,8 @@ class ContextDutyAddon:
     """mitmproxy addon — intercepts and redacts AI API requests."""
 
     def __init__(self, policy_path: str | None = None, audit_log: str | None = None):
-        from ..engine import scan_text
-        from ..policy import load_policy
+        from contextduty.engine import scan_text
+        from contextduty.policy import load_policy
 
         self._scan_text = scan_text
         policy_file = Path(policy_path) if policy_path else Path(".contextduty.json")
@@ -128,8 +128,8 @@ class ContextDutyAddon:
         if not self.audit_log:
             return
         try:
-            from ..audit import write_audit_entry
-            from ..engine import ScanResult
+            from contextduty.audit import write_audit_entry
+            from contextduty.engine import ScanResult
 
             result = ScanResult(
                 findings_count=findings_count,

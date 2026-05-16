@@ -8,50 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from .config import BINARY_EXTENSIONS
 from .detectors import DETECTORS, Detector, stable_mask
 from .policy import Policy
 
-# Extensions treated as binary — skipped during directory scans
-_BINARY_EXTENSIONS = {
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".webp",
-    ".ico",
-    ".svg",
-    ".pdf",
-    ".zip",
-    ".gz",
-    ".tar",
-    ".bz2",
-    ".xz",
-    ".7z",
-    ".rar",
-    ".exe",
-    ".dll",
-    ".so",
-    ".dylib",
-    ".bin",
-    ".whl",
-    ".egg",
-    ".pyc",
-    ".pyo",
-    ".pyd",
-    ".mp3",
-    ".mp4",
-    ".wav",
-    ".avi",
-    ".mov",
-    ".ttf",
-    ".otf",
-    ".woff",
-    ".woff2",
-    ".db",
-    ".sqlite",
-    ".sqlite3",
-    ".lock",  # dependency lock files are rarely human-readable secrets
-}
+# Backward-compat alias — old imports still work
+_BINARY_EXTENSIONS = BINARY_EXTENSIONS
 
 
 @dataclass(frozen=True)

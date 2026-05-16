@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from .core.exceptions import PolicyCycleError, PolicyValidationError
 from .detectors import DETECTORS
 
 VALID_MODES = {"redact", "warn", "block"}
@@ -86,7 +87,7 @@ def write_default_policy(path: Path) -> None:
 def _read_policy_config(path: Path) -> dict[str, Any]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise ValueError(f"policy file must contain a JSON object: {path}")
+        raise PolicyValidationError(f"policy file must contain a JSON object: {path}", field="root")
     return raw
 
 
@@ -97,7 +98,9 @@ def _normalize_extends(value: Any) -> list[str]:
         return [value]
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return value
-    raise ValueError("policy extends must be a string or list of strings")
+    raise PolicyValidationError(
+        "policy extends must be a string or list of strings", field="extends"
+    )
 
 
 def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -108,17 +111,17 @@ def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dic
     if not isinstance(base_detectors, list) or not all(
         isinstance(name, str) for name in base_detectors
     ):
-        raise ValueError("policy detectors must be a list of strings")
+        raise PolicyValidationError("policy detectors must be a list of strings")
     if not isinstance(override_detectors, list) or not all(
         isinstance(name, str) for name in override_detectors
     ):
-        raise ValueError("policy detectors must be a list of strings")
+        raise PolicyValidationError("policy detectors must be a list of strings")
     merged["detectors"] = list(dict.fromkeys(base_detectors + override_detectors))
 
     base_custom = base.get("custom_detectors", {})
     override_custom = override.get("custom_detectors", {})
     if not isinstance(base_custom, dict) or not isinstance(override_custom, dict):
-        raise ValueError("policy custom_detectors must be an object of {name: regex}")
+        raise PolicyValidationError("policy custom_detectors must be an object of {name: regex}")
     merged["custom_detectors"] = {**base_custom, **override_custom}
 
     if "mode" in override:
@@ -128,14 +131,16 @@ def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dic
     base_dm = base.get("detector_modes", {})
     override_dm = override.get("detector_modes", {})
     if not isinstance(base_dm, dict) or not isinstance(override_dm, dict):
-        raise ValueError("policy detector_modes must be an object of {detector: mode}")
+        raise PolicyValidationError("policy detector_modes must be an object of {detector: mode}")
     merged["detector_modes"] = {**base_dm, **override_dm}
 
     # allow_patterns: lists are merged (union) per detector key
     base_ap = base.get("allow_patterns", {})
     override_ap = override.get("allow_patterns", {})
     if not isinstance(base_ap, dict) or not isinstance(override_ap, dict):
-        raise ValueError("policy allow_patterns must be an object of {detector: [pattern, ...]}")
+        raise PolicyValidationError(
+            "policy allow_patterns must be an object of {detector: [pattern, ...]}"
+        )
     merged_ap: dict[str, list[str]] = dict(base_ap)
     for key, patterns in override_ap.items():
         existing = merged_ap.get(key, [])
@@ -149,7 +154,7 @@ def _resolve_policy_config(path: Path, seen: set[Path] | None = None) -> dict[st
     seen = seen or set()
     resolved_path = path.resolve()
     if resolved_path in seen:
-        raise ValueError(f"policy extends cycle detected at: {resolved_path}")
+        raise PolicyCycleError([str(p) for p in seen] + [str(resolved_path)])
     seen.add(resolved_path)
 
     config = _read_policy_config(resolved_path)
@@ -185,9 +190,9 @@ def _validate_detector_modes(detector_modes: dict[str, Any]) -> dict[str, str]:
     validated: dict[str, str] = {}
     for name, mode in detector_modes.items():
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("detector_modes keys must be non-empty strings")
+            raise PolicyValidationError("detector_modes keys must be non-empty strings")
         if not isinstance(mode, str) or mode not in VALID_MODES:
-            raise ValueError(
+            raise PolicyValidationError(
                 f"detector_modes['{name}'] must be one of: {', '.join(sorted(VALID_MODES))}"
             )
         validated[name] = mode
@@ -198,19 +203,21 @@ def _validate_allow_patterns(allow_patterns: dict[str, Any]) -> dict[str, list[s
     validated: dict[str, list[str]] = {}
     for detector_name, patterns in allow_patterns.items():
         if not isinstance(detector_name, str) or not detector_name.strip():
-            raise ValueError("allow_patterns keys must be non-empty strings")
+            raise PolicyValidationError("allow_patterns keys must be non-empty strings")
         if not isinstance(patterns, list):
-            raise ValueError(f"allow_patterns['{detector_name}'] must be a list of regex strings")
+            raise PolicyValidationError(
+                f"allow_patterns['{detector_name}'] must be a list of regex strings"
+            )
         compiled: list[str] = []
         for i, pattern in enumerate(patterns):
             if not isinstance(pattern, str) or not pattern.strip():
-                raise ValueError(
+                raise PolicyValidationError(
                     f"allow_patterns['{detector_name}'][{i}] must be a non-empty regex string"
                 )
             try:
                 re.compile(pattern)
             except re.error as exc:
-                raise ValueError(
+                raise PolicyValidationError(
                     f"invalid regex in allow_patterns['{detector_name}'][{i}]: {exc}"
                 ) from exc
             compiled.append(pattern)
@@ -226,43 +233,51 @@ def load_policy(path: Path | None) -> Policy:
 
     mode = str(config.get("mode", "redact")).lower()
     if mode not in VALID_MODES:
-        raise ValueError("policy mode must be one of: redact, warn, block")
+        raise PolicyValidationError("policy mode must be one of: redact, warn, block")
 
     detectors_raw = config.get("detectors", DEFAULT_POLICY["detectors"])
     if not isinstance(detectors_raw, list) or not all(
         isinstance(name, str) for name in detectors_raw
     ):
-        raise ValueError("policy detectors must be a list of strings")
+        raise PolicyValidationError("policy detectors must be a list of strings")
 
     custom_raw = config.get("custom_detectors", {})
     if not isinstance(custom_raw, dict):
-        raise ValueError("policy custom_detectors must be an object of {name: regex}")
+        raise PolicyValidationError("policy custom_detectors must be an object of {name: regex}")
 
     built_in_names = {detector.name for detector in DETECTORS}
     custom_detectors: dict[str, str] = {}
     for name, pattern in custom_raw.items():
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("custom detector names must be non-empty strings")
+            raise PolicyValidationError("custom detector names must be non-empty strings")
         if name in built_in_names:
-            raise ValueError(f"custom detector name '{name}' conflicts with built-in detector")
+            raise PolicyValidationError(
+                f"custom detector name '{name}' conflicts with built-in detector"
+            )
         if not isinstance(pattern, str) or not pattern.strip():
-            raise ValueError(f"custom detector '{name}' must have a non-empty regex string")
+            raise PolicyValidationError(
+                f"custom detector '{name}' must have a non-empty regex string"
+            )
         try:
             re.compile(pattern)
         except re.error as exc:
-            raise ValueError(f"invalid regex for custom detector '{name}': {exc}") from exc
+            raise PolicyValidationError(
+                f"invalid regex for custom detector '{name}': {exc}"
+            ) from exc
         custom_detectors[name] = pattern
 
     detectors = set(detectors_raw) | set(custom_detectors.keys())
 
     detector_modes_raw = config.get("detector_modes", {})
     if not isinstance(detector_modes_raw, dict):
-        raise ValueError("policy detector_modes must be an object of {detector: mode}")
+        raise PolicyValidationError("policy detector_modes must be an object of {detector: mode}")
     detector_modes = _validate_detector_modes(detector_modes_raw)
 
     allow_patterns_raw = config.get("allow_patterns", {})
     if not isinstance(allow_patterns_raw, dict):
-        raise ValueError("policy allow_patterns must be an object of {detector: [pattern, ...]}")
+        raise PolicyValidationError(
+            "policy allow_patterns must be an object of {detector: [pattern, ...]}"
+        )
     allow_patterns = _validate_allow_patterns(allow_patterns_raw)
 
     return Policy(
@@ -302,7 +317,7 @@ def _fetch_url_policy(url: str, timeout: int = 10) -> dict[str, Any]:
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise ValueError(f"policy URL must use http or https scheme: {url}")
+        raise PolicyValidationError(f"policy URL must use http or https scheme: {url}")
 
     req = urllib.request.Request(
         url,
@@ -312,15 +327,15 @@ def _fetch_url_policy(url: str, timeout: int = 10) -> dict[str, Any]:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
             raw = resp.read().decode("utf-8")
     except Exception as exc:
-        raise ValueError(f"failed to fetch policy from {url}: {exc}") from exc
+        raise PolicyValidationError(f"failed to fetch policy from {url}: {exc}") from exc
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"policy at {url} is not valid JSON: {exc}") from exc
+        raise PolicyValidationError(f"policy at {url} is not valid JSON: {exc}") from exc
 
     if not isinstance(data, dict):
-        raise ValueError(f"policy at {url} must contain a JSON object")
+        raise PolicyValidationError(f"policy at {url} must contain a JSON object")
     return data
 
 
@@ -342,7 +357,7 @@ def _resolve_policy_config_with_urls(
     """Resolve a policy ref that may be either a file path or a URL."""
     if _is_url(ref):
         if ref in seen_urls:
-            raise ValueError(f"policy extends cycle detected at URL: {ref}")
+            raise PolicyValidationError(f"policy extends cycle detected at URL: {ref}")
         seen_urls.add(ref)
         config = _fetch_url_policy(ref)
         parent_refs = _normalize_extends(config.get("extends"))

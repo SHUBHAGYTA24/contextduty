@@ -12,11 +12,23 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from pathlib import Path
 
-from .feed import record_interception
-from .interceptor import redact_body
-from .scope import is_prompt_request
+# When mitmproxy loads this file via `-s addon.py` it runs it as
+# __mitmproxy_script__, not as contextduty.proxy.addon — so relative
+# imports fail. We detect that and ensure the package is importable.
+if __name__ == "__mitmproxy_script__" or not __package__:
+    _pkg_root = Path(__file__).parent.parent.parent.parent
+    if str(_pkg_root) not in sys.path:
+        sys.path.insert(0, str(_pkg_root))
+    from contextduty.proxy.feed import record_interception
+    from contextduty.proxy.interceptor import redact_body
+    from contextduty.proxy.scope import is_prompt_request
+else:
+    from .feed import record_interception
+    from .interceptor import redact_body
+    from .scope import is_prompt_request
 
 log = logging.getLogger("contextduty.proxy")
 

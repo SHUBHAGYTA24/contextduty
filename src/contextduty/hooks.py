@@ -35,7 +35,7 @@ _HOOK_TEMPLATE = """\
 # Blocks the commit if any file has findings in block mode.
 # Edit CONTEXTDUTY_POLICY and CONTEXTDUTY_AUDIT_LOG below to customise.
 
-set -euo pipefail
+set -uo pipefail
 
 CONTEXTDUTY_POLICY="{policy}"
 CONTEXTDUTY_AUDIT_LOG="{audit_log}"
@@ -71,8 +71,7 @@ while IFS= read -r file; do
     SCAN_ARGS+=(--audit-log "$CONTEXTDUTY_AUDIT_LOG")
   fi
 
-  OUTPUT=$(contextduty scan "${{SCAN_ARGS[@]}}" 2>&1)
-  EXIT_CODE=$?
+  OUTPUT=$(contextduty scan "${{SCAN_ARGS[@]}}" 2>&1); EXIT_CODE=$?
 
   # Parse findings_count from JSON output
   COUNT=$(echo "$OUTPUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('findings_count',0))" 2>/dev/null || echo "0")

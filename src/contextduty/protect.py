@@ -22,9 +22,11 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .engine import _BINARY_EXTENSIONS, _active_detectors, _scan_line
+from .config import BINARY_EXTENSIONS, SKIP_DIRECTORIES
+from .engine import _active_detectors, _scan_line
 from .policy import Policy, load_policy
 from .proxy.scope import AI_API_HOSTS
+from .ui.output import style
 
 # ──────────���──────────────────────────────────────��───────────────────────────
 # AI Tool Registry — add new tools here. That's it. Everything else is generic.
@@ -87,13 +89,6 @@ AI_TOOLS: list[AITool] = [
 # Terminal formatting
 # ─────────────────────────────────────────────────────────────────────────────
 
-_BOLD = "\033[1m"
-_GREEN = "\033[32m"
-_RED = "\033[31m"
-_YELLOW = "\033[33m"
-_CYAN = "\033[36m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
 
 
 # ─────────────────────────────────────────────────────��───────────────────────
@@ -110,18 +105,18 @@ def protect_workspace(
     policy = _load_policy(policy_path)
     out_dir = output_dir or workspace
 
-    print(f"\n{_BOLD}{'─' * 56}{_RESET}")
-    print(f"{_BOLD}  ContextDuty — Universal AI Workspace Protection{_RESET}")
-    print(f"{_BOLD}{'─' * 56}{_RESET}\n")
-    print(f"  Workspace   {_DIM}{workspace}{_RESET}")
-    print(f"  Policy      {_DIM}{policy_path or 'default'}{_RESET}")
+    print(f"\n{style.bold}{'─' * 56}{style.reset}")
+    print(f"{style.bold}  ContextDuty — Universal AI Workspace Protection{style.reset}")
+    print(f"{style.bold}{'─' * 56}{style.reset}\n")
+    print(f"  Workspace   {style.dim}{workspace}{style.reset}")
+    print(f"  Policy      {style.dim}{policy_path or 'default'}{style.reset}")
     print()
 
     # Scan
     sensitive_files = _scan_workspace(workspace, policy)
 
     if not sensitive_files:
-        print(f"  {_GREEN}✓{_RESET}  No secrets or PII detected.")
+        print(f"  {style.green}✓{style.reset}  No secrets or PII detected.")
         print("     All AI tools can safely index this workspace.")
         print()
         _print_coverage_status(workspace)
@@ -129,13 +124,13 @@ def protect_workspace(
 
     # Report findings
     print(
-        f"  {_YELLOW}⚠{_RESET}  {_BOLD}{len(sensitive_files)}{_RESET} file(s) contain secrets/PII:\n"
+        f"  {style.yellow}⚠{style.reset}  {style.bold}{len(sensitive_files)}{style.reset} file(s) contain secrets/PII:\n"
     )
     for fpath, detectors in sensitive_files[:15]:
         det_str = ", ".join(sorted(detectors))
-        print(f"     {fpath}  {_DIM}[{det_str}]{_RESET}")
+        print(f"     {fpath}  {style.dim}[{det_str}]{style.reset}")
     if len(sensitive_files) > 15:
-        print(f"     {_DIM}... and {len(sensitive_files) - 15} more{_RESET}")
+        print(f"     {style.dim}... and {len(sensitive_files) - 15} more{style.reset}")
     print()
 
     # Write ignore files for ALL tools
@@ -149,19 +144,19 @@ def protect_workspace(
         _write_ignore_file(ignore_path, sensitive_files, workspace, tool)
         tools_written += 1
 
-    print(f"  {_GREEN}✓{_RESET}  Written {_BOLD}{tools_written}{_RESET} ignore files:\n")
+    print(f"  {style.green}✓{style.reset}  Written {style.bold}{tools_written}{style.reset} ignore files:\n")
     for tool in AI_TOOLS:
         if tool.has_ignore_file:
             exists = (out_dir / tool.ignore_file).exists()
-            icon = f"{_GREEN}✓{_RESET}" if exists else f"{_RED}✗{_RESET}"
-            print(f"     {icon}  {tool.ignore_file:<20} {_DIM}{tool.name}{_RESET}")
+            icon = f"{style.green}✓{style.reset}" if exists else f"{style.red}✗{style.reset}"
+            print(f"     {icon}  {tool.ignore_file:<20} {style.dim}{tool.name}{style.reset}")
     print()
 
     # Show coverage
     _print_coverage_status(workspace)
 
-    print(f"\n  {_DIM}Keep updated: contextduty protect watch{_RESET}")
-    print(f"  {_DIM}Full interception: contextduty proxy start{_RESET}\n")
+    print(f"\n  {style.dim}Keep updated: contextduty protect watch{style.reset}")
+    print(f"  {style.dim}Full interception: contextduty proxy start{style.reset}\n")
     return 0
 
 
@@ -173,12 +168,12 @@ def protect_watch(
     """Watch workspace and update ALL ignore files on change."""
     policy = _load_policy(policy_path)
 
-    print(f"\n{_BOLD}ContextDuty — Watch Mode (all AI tools){_RESET}\n")
-    print(f"  Workspace  {_DIM}{workspace}{_RESET}")
-    print(f"  Interval   {_DIM}{interval}s{_RESET}")
+    print(f"\n{style.bold}ContextDuty — Watch Mode (all AI tools){style.reset}\n")
+    print(f"  Workspace  {style.dim}{workspace}{style.reset}")
+    print(f"  Interval   {style.dim}{interval}s{style.reset}")
     tools_str = ", ".join(t.name for t in AI_TOOLS if t.has_ignore_file)
-    print(f"  Protecting {_DIM}{tools_str}{_RESET}")
-    print(f"\n  {_DIM}Press Ctrl+C to stop.{_RESET}\n")
+    print(f"  Protecting {style.dim}{tools_str}{style.reset}")
+    print(f"\n  {style.dim}Press Ctrl+C to stop.{style.reset}\n")
 
     last_state: set[str] = set()
     try:
@@ -201,48 +196,48 @@ def protect_watch(
                 ts = time.strftime("%H:%M:%S")
                 if not last_state:
                     print(
-                        f"  {ts}  {_DIM}Watching... "
+                        f"  {ts}  {style.dim}Watching... "
                         f"{len(current_state)} files blocked across "
-                        f"{len(AI_TOOLS)} AI tools{_RESET}"
+                        f"{len(AI_TOOLS)} AI tools{style.reset}"
                     )
                 else:
                     if added:
                         for f in sorted(added)[:3]:
-                            print(f"  {ts}  {_YELLOW}+blocked{_RESET} {f}")
+                            print(f"  {ts}  {style.yellow}+blocked{style.reset} {f}")
                     if removed:
                         for f in sorted(removed)[:3]:
-                            print(f"  {ts}  {_GREEN}-cleared{_RESET} {f}")
+                            print(f"  {ts}  {style.green}-cleared{style.reset} {f}")
                     extra = len(added) + len(removed) - 6
                     if extra > 0:
-                        print(f"  {ts}  {_DIM}... and {extra} more changes{_RESET}")
+                        print(f"  {ts}  {style.dim}... and {extra} more changes{style.reset}")
 
                 last_state = current_state
 
             time.sleep(interval)
     except KeyboardInterrupt:
-        print(f"\n  {_GREEN}✓{_RESET}  Watch stopped.\n")
+        print(f"\n  {style.green}✓{style.reset}  Watch stopped.\n")
         return 0
 
 
 def protect_status(workspace: Path) -> int:
     """Show protection status for the workspace."""
-    print(f"\n{_BOLD}{'─' * 56}{_RESET}")
-    print(f"{_BOLD}  ContextDuty — Protection Status{_RESET}")
-    print(f"{_BOLD}{'─' * 56}{_RESET}\n")
+    print(f"\n{style.bold}{'─' * 56}{style.reset}")
+    print(f"{style.bold}  ContextDuty — Protection Status{style.reset}")
+    print(f"{style.bold}{'─' * 56}{style.reset}\n")
 
     _print_coverage_status(workspace)
 
     # Check proxy
     from .proxy.server import _is_running, _read_pid
 
-    print(f"\n  {_BOLD}HTTPS Proxy (downstream interception){_RESET}\n")
+    print(f"\n  {style.bold}HTTPS Proxy (downstream interception){style.reset}\n")
     if _is_running():
         pid = _read_pid()
-        print(f"  {_GREEN}✓{_RESET}  Proxy running (PID {pid})")
+        print(f"  {style.green}✓{style.reset}  Proxy running (PID {pid})")
         print(f"     Intercepting {len(AI_API_HOSTS)} AI API endpoints")
     else:
-        print(f"  {_YELLOW}⚠{_RESET}  Proxy not running")
-        print(f"     Start with: {_CYAN}contextduty proxy start{_RESET}")
+        print(f"  {style.yellow}⚠{style.reset}  Proxy not running")
+        print(f"     Start with: {style.cyan}contextduty proxy start{style.reset}")
 
     print()
     return 0
@@ -255,7 +250,7 @@ def protect_status(workspace: Path) -> int:
 
 def _print_coverage_status(workspace: Path) -> None:
     """Print which AI tools are covered by ignore files."""
-    print(f"  {_BOLD}Upstream Protection (ignore files){_RESET}\n")
+    print(f"  {style.bold}Upstream Protection (ignore files){style.reset}\n")
     for tool in AI_TOOLS:
         if not tool.has_ignore_file:
             continue
@@ -269,10 +264,10 @@ def _print_coverage_status(workspace: Path) -> None:
                 if line.strip() and not line.strip().startswith("#")
             ]
             print(
-                f"  {_GREEN}✓{_RESET}  {tool.name:<25} {_DIM}{len(entries)} files blocked{_RESET}"
+                f"  {style.green}✓{style.reset}  {tool.name:<25} {style.dim}{len(entries)} files blocked{style.reset}"
             )
         else:
-            print(f"  {_RED}✗{_RESET}  {tool.name:<25} {_DIM}not configured{_RESET}")
+            print(f"  {style.red}✗{style.reset}  {tool.name:<25} {style.dim}not configured{style.reset}")
 
 
 def _load_policy(policy_path: str | None) -> Policy:
@@ -295,26 +290,12 @@ def _scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]
             d
             for d in dirs
             if not d.startswith(".")
-            and d
-            not in {
-                "node_modules",
-                "__pycache__",
-                "venv",
-                ".venv",
-                "dist",
-                "build",
-                "target",
-                "vendor",
-                "packages",
-                ".next",
-                ".nuxt",
-                "coverage",
-            }
+            and d not in SKIP_DIRECTORIES
         ]
 
         for fname in files:
             fpath = Path(root) / fname
-            if fpath.suffix.lower() in _BINARY_EXTENSIONS:
+            if fpath.suffix.lower() in BINARY_EXTENSIONS:
                 continue
 
             rel = str(fpath.relative_to(workspace))

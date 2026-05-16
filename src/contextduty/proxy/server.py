@@ -20,20 +20,15 @@ import sys
 import time
 from pathlib import Path
 
+from ..config import HOME_DIR
+from ..ui.output import style
 from . import ca, system
 from .scope import AI_API_HOSTS
 
 _PROXY_HOST = "127.0.0.1"
 _DEFAULT_PORT = 8080
-_PID_FILE = Path.home() / ".contextduty" / "proxy.pid"
+_PID_FILE = HOME_DIR / "proxy.pid"
 
-_BOLD = "\033[1m"
-_GREEN = "\033[32m"
-_RED = "\033[31m"
-_YELLOW = "\033[33m"
-_CYAN = "\033[36m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +55,7 @@ def proxy_setup(policy_path: str = ".contextduty.json", audit_log: str = "") -> 
     os_name = platform.system()
     if os_name == "Darwin":
         _step("Installing CA certificate into macOS System Keychain...")
-        _print(f"  {_DIM}(requires sudo — you will be prompted){_RESET}")
+        _print(f"  {style.dim}(requires sudo — you will be prompted){style.reset}")
         rc = ca.install_cert()
         if rc != 0:
             _err("Certificate installation failed.")
@@ -86,10 +81,10 @@ def proxy_setup(policy_path: str = ".contextduty.json", audit_log: str = "") -> 
     # Step 4 — Next steps
     _print()
     _ok("Setup complete. Start intercepting with:")
-    _print(f"  {_CYAN}contextduty proxy start{_RESET}")
+    _print(f"  {style.cyan}contextduty proxy start{style.reset}")
     _print()
-    _print(f"  {_DIM}Set your system proxy to 127.0.0.1:{_DEFAULT_PORT} or run:{_RESET}")
-    _print(f"  {_CYAN}contextduty proxy start --set-system-proxy{_RESET}")
+    _print(f"  {style.dim}Set your system proxy to 127.0.0.1:{_DEFAULT_PORT} or run:{style.reset}")
+    _print(f"  {style.cyan}contextduty proxy start --set-system-proxy{style.reset}")
     return 0
 
 
@@ -124,38 +119,42 @@ def proxy_start(
     addon_path = Path(__file__).parent / "addon.py"
     cmd = [
         _mitmdump_path(),
-        "--listen-host", _PROXY_HOST,
-        "--listen-port", str(port),
+        "--listen-host",
+        _PROXY_HOST,
+        "--listen-port",
+        str(port),
         "--ssl-insecure",
-        "-s", str(addon_path),
-        "--set", f"contextduty_policy={policy_path}",
+        "-s",
+        str(addon_path),
+        "--set",
+        f"contextduty_policy={policy_path}",
     ]
     if audit_log:
         cmd += ["--set", f"contextduty_audit_log={audit_log}"]
 
     # Print status
     _section("ContextDuty Proxy")
-    _print(f"  Listening on   {_BOLD}127.0.0.1:{port}{_RESET}")
-    _print(f"  Intercepting   {_DIM}{len(AI_API_HOSTS)} AI API endpoints{_RESET}")
-    _print(f"  Policy         {_DIM}{policy_path}{_RESET}")
+    _print(f"  Listening on   {style.bold}127.0.0.1:{port}{style.reset}")
+    _print(f"  Intercepting   {style.dim}{len(AI_API_HOSTS)} AI API endpoints{style.reset}")
+    _print(f"  Policy         {style.dim}{policy_path}{style.reset}")
     if audit_log:
-        _print(f"  Audit log      {_DIM}{audit_log}{_RESET}")
+        _print(f"  Audit log      {style.dim}{audit_log}{style.reset}")
     if not ca.is_cert_installed():
         _print()
         _warn("CA cert not installed yet. Browsers/tools may reject the proxy.")
-        _print(f"  Run first: {_CYAN}contextduty proxy setup{_RESET}")
+        _print(f"  Run first: {style.cyan}contextduty proxy setup{style.reset}")
     _print()
 
     if set_system_proxy:
         system.configure(port, enable=True)
         _ok(f"System proxy set to 127.0.0.1:{port}")
-        _print(f"  {_DIM}Run 'contextduty proxy stop' to restore.{_RESET}")
+        _print(f"  {style.dim}Run 'contextduty proxy stop' to restore.{style.reset}")
         _print()
 
     if daemon:
         return _start_daemon(cmd, port)
 
-    _print(f"  {_DIM}Press Ctrl+C to stop.{_RESET}\n")
+    _print(f"  {style.dim}Press Ctrl+C to stop.{style.reset}\n")
     try:
         os.execvp(cmd[0], cmd)
     except FileNotFoundError:
@@ -209,13 +208,13 @@ def proxy_status() -> int:
         _print(f"  Policy:       {config.get('policy_path', 'default')}")
     else:
         _warn("Not running")
-        _print(f"  Start with: {_CYAN}contextduty proxy start{_RESET}")
+        _print(f"  Start with: {style.cyan}contextduty proxy start{style.reset}")
 
     _print()
     if ca.is_cert_installed():
         _ok(f"CA cert installed: {ca.CERT_FILE}")
     else:
-        _warn(f"CA cert not installed — run: {_CYAN}contextduty proxy setup{_RESET}")
+        _warn(f"CA cert not installed — run: {style.cyan}contextduty proxy setup{style.reset}")
     return 0
 
 
@@ -260,7 +259,7 @@ def _start_daemon(cmd: list[str], port: int) -> int:
         return 1
 
     _ok(f"Proxy running in background (PID {proc.pid})")
-    _print(f"  Stop with: {_CYAN}contextduty proxy stop{_RESET}")
+    _print(f"  Stop with: {style.cyan}contextduty proxy stop{style.reset}")
     return 0
 
 
@@ -278,9 +277,9 @@ def _mitmdump_available() -> bool:
 
 
 def _section(title: str) -> None:
-    _print(f"\n{_BOLD}{'─' * 50}{_RESET}")
-    _print(f"{_BOLD}  {title}{_RESET}")
-    _print(f"{_BOLD}{'─' * 50}{_RESET}\n")
+    _print(f"\n{style.bold}{'─' * 50}{style.reset}")
+    _print(f"{style.bold}  {title}{style.reset}")
+    _print(f"{style.bold}{'─' * 50}{style.reset}\n")
 
 
 def _step(msg: str) -> None:
@@ -288,15 +287,15 @@ def _step(msg: str) -> None:
 
 
 def _ok(msg: str) -> None:
-    print(f"  {_GREEN}✓{_RESET}  {msg}", flush=True)
+    print(f"  {style.green}✓{style.reset}  {msg}", flush=True)
 
 
 def _warn(msg: str) -> None:
-    print(f"  {_YELLOW}⚠{_RESET}  {msg}", flush=True)
+    print(f"  {style.yellow}⚠{style.reset}  {msg}", flush=True)
 
 
 def _err(msg: str) -> None:
-    print(f"  {_RED}✗{_RESET}  {msg}", file=sys.stderr, flush=True)
+    print(f"  {style.red}✗{style.reset}  {msg}", file=sys.stderr, flush=True)
 
 
 def _print(msg: str = "") -> None:

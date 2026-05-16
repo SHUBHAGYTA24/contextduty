@@ -15,8 +15,10 @@ import os
 import time
 from pathlib import Path
 
-from .engine import _BINARY_EXTENSIONS, _active_detectors, _scan_line
+from .config import BINARY_EXTENSIONS, SKIP_DIRECTORIES
+from .engine import _active_detectors, _scan_line
 from .policy import Policy, load_policy
+from .ui.output import style
 
 _HEADER = """\
 # ContextDuty — auto-generated .cursorignore
@@ -33,12 +35,6 @@ _HEADER = """\
 
 _FOOTER = "# ── AUTO-END ──\n"
 
-_BOLD = "\033[1m"
-_GREEN = "\033[32m"
-_YELLOW = "\033[33m"
-_CYAN = "\033[36m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
 
 
 def cursor_setup(
@@ -50,31 +46,31 @@ def cursor_setup(
     policy = _load_policy(policy_path)
     ignore_path = output or (workspace / ".cursorignore")
 
-    print(f"\n{_BOLD}ContextDuty — Cursor Workspace Protection{_RESET}\n")
-    print(f"  Scanning   {_DIM}{workspace}{_RESET}")
-    print(f"  Policy     {_DIM}{policy_path or 'default'}{_RESET}")
+    print(f"\n{style.bold}ContextDuty — Cursor Workspace Protection{style.reset}\n")
+    print(f"  Scanning   {style.dim}{workspace}{style.reset}")
+    print(f"  Policy     {style.dim}{policy_path or 'default'}{style.reset}")
     print()
 
     sensitive_files = _scan_workspace(workspace, policy)
 
     if not sensitive_files:
-        print(f"  {_GREEN}✓{_RESET}  No secrets detected — workspace is clean.")
+        print(f"  {style.green}✓{style.reset}  No secrets detected — workspace is clean.")
         print("     Cursor can safely index all files.")
         return 0
 
-    print(f"  {_YELLOW}⚠{_RESET}  {len(sensitive_files)} file(s) contain secrets/PII:\n")
+    print(f"  {style.yellow}⚠{style.reset}  {len(sensitive_files)} file(s) contain secrets/PII:\n")
     for fpath, detectors in sensitive_files[:20]:
         det_str = ", ".join(sorted(detectors))
-        print(f"     {_DIM}{fpath}{_RESET}  [{det_str}]")
+        print(f"     {style.dim}{fpath}{style.reset}  [{det_str}]")
     if len(sensitive_files) > 20:
-        print(f"     {_DIM}... and {len(sensitive_files) - 20} more{_RESET}")
+        print(f"     {style.dim}... and {len(sensitive_files) - 20} more{style.reset}")
 
     # Write .cursorignore
     _write_cursorignore(ignore_path, sensitive_files, workspace)
 
-    print(f"\n  {_GREEN}✓{_RESET}  Written {_BOLD}{ignore_path}{_RESET}")
+    print(f"\n  {style.green}✓{style.reset}  Written {style.bold}{ignore_path}{style.reset}")
     print(f"     {len(sensitive_files)} files blocked from Cursor indexing.")
-    print(f"\n  {_DIM}Keep it updated: contextduty cursor watch{_RESET}\n")
+    print(f"\n  {style.dim}Keep it updated: contextduty cursor watch{style.reset}\n")
     return 0
 
 
@@ -87,11 +83,11 @@ def cursor_watch(
     policy = _load_policy(policy_path)
     ignore_path = workspace / ".cursorignore"
 
-    print(f"\n{_BOLD}ContextDuty — Cursor Watch Mode{_RESET}\n")
-    print(f"  Workspace  {_DIM}{workspace}{_RESET}")
-    print(f"  Interval   {_DIM}{interval}s{_RESET}")
-    print(f"  Output     {_DIM}{ignore_path}{_RESET}")
-    print(f"\n  {_DIM}Press Ctrl+C to stop.{_RESET}\n")
+    print(f"\n{style.bold}ContextDuty — Cursor Watch Mode{style.reset}\n")
+    print(f"  Workspace  {style.dim}{workspace}{style.reset}")
+    print(f"  Interval   {style.dim}{interval}s{style.reset}")
+    print(f"  Output     {style.dim}{ignore_path}{style.reset}")
+    print(f"\n  {style.dim}Press Ctrl+C to stop.{style.reset}\n")
 
     last_state: set[str] = set()
     try:
@@ -107,22 +103,22 @@ def cursor_watch(
                 ts = time.strftime("%H:%M:%S")
                 if added:
                     for f in sorted(added)[:5]:
-                        print(f"  {ts}  {_YELLOW}+{_RESET} {f}")
+                        print(f"  {ts}  {style.yellow}+{style.reset} {f}")
                 if removed:
                     for f in sorted(removed)[:5]:
-                        print(f"  {ts}  {_GREEN}-{_RESET} {f}")
+                        print(f"  {ts}  {style.green}-{style.reset} {f}")
                 if not last_state:
-                    print(f"  {ts}  {_DIM}Watching... {len(current_state)} files blocked{_RESET}")
+                    print(f"  {ts}  {style.dim}Watching... {len(current_state)} files blocked{style.reset}")
                 else:
                     print(
-                        f"  {ts}  {_DIM}Updated .cursorignore "
-                        f"(+{len(added)} -{len(removed)}){_RESET}"
+                        f"  {ts}  {style.dim}Updated .cursorignore "
+                        f"(+{len(added)} -{len(removed)}){style.reset}"
                     )
                 last_state = current_state
 
             time.sleep(interval)
     except KeyboardInterrupt:
-        print(f"\n  {_GREEN}✓{_RESET}  Watch stopped.\n")
+        print(f"\n  {style.green}✓{style.reset}  Watch stopped.\n")
         return 0
 
 
@@ -147,12 +143,12 @@ def _scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]
             d
             for d in dirs
             if not d.startswith(".")
-            and d not in {"node_modules", "__pycache__", "venv", ".venv", "dist", "build", "target"}
+            and d not in SKIP_DIRECTORIES
         ]
 
         for fname in files:
             fpath = Path(root) / fname
-            if fpath.suffix.lower() in _BINARY_EXTENSIONS:
+            if fpath.suffix.lower() in BINARY_EXTENSIONS:
                 continue
 
             rel = str(fpath.relative_to(workspace))

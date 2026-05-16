@@ -153,13 +153,22 @@ def _block_response():
         }
     ).encode()
 
-    from mitmproxy.http import Response
+    try:
+        from mitmproxy.http import Response
 
-    return Response.make(
-        403,
-        body,
-        {"Content-Type": "application/json", "X-Blocked-By": "ContextDuty"},
-    )
+        return Response.make(
+            403,
+            body,
+            {"Content-Type": "application/json", "X-Blocked-By": "ContextDuty"},
+        )
+    except ImportError:
+        # Fallback for environments without mitmproxy (e.g. testing)
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.status_code = 403
+        resp.content = body
+        return resp
 
 
 # Entry point for `mitmdump -s addon.py`

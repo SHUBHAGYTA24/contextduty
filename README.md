@@ -68,23 +68,31 @@ Plus: **MCP server** for Cursor/Claude tool-call interception, **CI/CD integrati
 ## Quick start
 
 ```bash
+# 1. Install
 pip install contextduty
 
-# Try the interactive demo (20 seconds)
+# 2. Go to your project root (where .git lives) — all commands run from here
+cd your-project/
+
+# 3. Try the interactive demo (20 seconds)
 contextduty demo
 
-# Protect your workspace from ALL AI tools
-cd your-project/
+# 4. Create a policy file
+contextduty init
+
+# 5. Block ALL AI tools from reading your secrets
 contextduty protect
 
-# Install git pre-commit hook
+# 6. Block secrets from entering git history
 contextduty install-hooks
 
-# Start the HTTPS proxy (intercepts Cursor, Copilot, Claude API calls)
+# 7. Intercept live AI API calls (requires separate install)
 pip install 'contextduty[proxy]'
-contextduty proxy setup
-contextduty proxy start
+contextduty proxy setup          # one-time: installs CA cert (needs sudo)
+contextduty proxy start          # start intercepting
 ```
+
+> **Note:** `contextduty install-hooks` must be run from your project root (the folder that contains `.git/`). It will fail if run from a subdirectory.
 
 ---
 
@@ -156,6 +164,8 @@ contextduty protect watch   # runs continuously, updates all 6 ignore files
 ## Layer 2 — Pre-commit hook
 
 ```bash
+# Run from your project root (the folder that contains .git/)
+cd your-project/
 contextduty install-hooks
 ```
 
@@ -181,9 +191,14 @@ $ git commit -m "add deployment config"
 The proxy sits between your AI tools and their API endpoints. It intercepts requests to **21 AI API hosts** and redacts secrets from the request body before they leave your machine.
 
 ```bash
+# Step 1 — install proxy dependencies (mitmproxy, ~50 packages)
 pip install 'contextduty[proxy]'
-contextduty proxy setup    # one-time: install CA cert
-contextduty proxy start    # start intercepting
+
+# Step 2 — one-time CA cert setup (needs sudo, run once per machine)
+contextduty proxy setup
+
+# Step 3 — start intercepting
+contextduty proxy start
 
 ──────────────────────────────────────────────────────
   ContextDuty Proxy
@@ -418,9 +433,9 @@ make check    # format + lint + 258 tests
 - [x] HTTPS proxy intercepting 21 AI API endpoints
 - [x] Declarative field walker (new AI provider = add paths, zero code)
 - [x] Enterprise architecture (config, exceptions, UI, adapters)
+- [x] Published on PyPI (`pip install contextduty`)
 - [ ] VS Code / Cursor extension
 - [ ] Presidio integration for NLP-based PII detection
-- [ ] PyPI publish
 - [ ] Prometheus metrics endpoint
 
 ---

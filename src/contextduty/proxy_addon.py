@@ -18,16 +18,26 @@ from typing import Any
 
 log = logging.getLogger("contextduty.proxy")
 
-# AI API hostnames to intercept — everything else passes through untouched
-AI_HOSTS: frozenset[str] = frozenset(
-    {
-        "api.openai.com",
-        "api.anthropic.com",
-        "copilot.github.com",
-        "api.githubcopilot.com",
-        "openai.azure.com",  # Azure OpenAI
-    }
-)
+# AI API hostnames to intercept — everything else passes through untouched.
+# Import the canonical registry; fall back to a minimal set if circular import.
+try:
+    from .protect import AI_API_HOSTS as _REGISTRY
+
+    AI_HOSTS: frozenset[str] = frozenset(_REGISTRY.keys())
+except ImportError:
+    AI_HOSTS: frozenset[str] = frozenset(  # type: ignore[no-redef]
+        {
+            "api.openai.com",
+            "api.anthropic.com",
+            "copilot.github.com",
+            "api.githubcopilot.com",
+            "openai.azure.com",
+            "api2.cursor.sh",
+            "cursor.sh",
+            "generativelanguage.googleapis.com",
+            "aiplatform.googleapis.com",
+        }
+    )
 
 # Paths that carry prompt content — skip embeddings, images, audio
 _PROMPT_PATHS = {
@@ -41,8 +51,12 @@ _PROMPT_PATHS = {
 def _is_prompt_request(host: str, path: str) -> bool:
     if host not in AI_HOSTS:
         return False
-    # Accept if path starts with any known prompt path, or if it's Copilot
+    # Accept all paths for hosts that only serve AI prompts
     if "copilot" in host or "githubcopilot" in host:
+        return True
+    if "cursor.sh" in host:
+        return True
+    if "generativelanguage.googleapis.com" in host or "aiplatform.googleapis.com" in host:
         return True
     return any(path.startswith(p) for p in _PROMPT_PATHS)
 

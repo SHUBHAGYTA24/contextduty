@@ -123,6 +123,46 @@ def _parser() -> argparse.ArgumentParser:
         help="Run an interactive demo — catches a fake secret in under 20 seconds.",
     )
 
+    # ── protect ───────────────────────────────────────────────────────────────
+    protect_parser = subparsers.add_parser(
+        "protect",
+        help="Universal AI workspace protection — blocks sensitive files from ALL AI tools.",
+    )
+    protect_sub = protect_parser.add_subparsers(dest="protect_command")
+
+    # protect (no subcommand = setup)
+    protect_parser.add_argument("--workspace", default=".", help="Workspace root (default: cwd).")
+    protect_parser.add_argument("--policy", default=None, help="Policy file path.")
+
+    # protect watch
+    pw = protect_sub.add_parser("watch", help="Watch and auto-update all AI ignore files.")
+    pw.add_argument("--workspace", default=".", help="Workspace root.")
+    pw.add_argument("--policy", default=None, help="Policy file path.")
+    pw.add_argument("--interval", type=int, default=30, help="Scan interval seconds (default: 30).")
+
+    # protect status
+    ps_protect = protect_sub.add_parser("status", help="Show protection coverage status.")
+    ps_protect.add_argument("--workspace", default=".", help="Workspace root.")
+
+    # ── cursor ────────────────────────────────────────────────────────────────
+    cursor_parser = subparsers.add_parser(
+        "cursor",
+        help="Protect Cursor IDE — block sensitive files from AI indexing.",
+    )
+    cursor_sub = cursor_parser.add_subparsers(dest="cursor_command", required=True)
+
+    # cursor setup
+    cs = cursor_sub.add_parser("setup", help="Scan workspace and generate .cursorignore.")
+    cs.add_argument("--workspace", default=".", help="Workspace root (default: current dir).")
+    cs.add_argument("--policy", default=None, help="Policy file path.")
+    cs.add_argument("--output", default=None, help="Output path (default: <workspace>/.cursorignore).")
+
+    # cursor watch
+    cw = cursor_sub.add_parser("watch", help="Watch workspace and auto-update .cursorignore.")
+    cw.add_argument("--workspace", default=".", help="Workspace root (default: current dir).")
+    cw.add_argument("--policy", default=None, help="Policy file path.")
+    cw.add_argument("--interval", type=int, default=30, help="Scan interval in seconds (default: 30).")
+
     # ── proxy ─────────────────────────────────────────────────────────────────
     proxy_parser = subparsers.add_parser(
         "proxy",
@@ -325,6 +365,28 @@ def main() -> None:  # noqa: C901
 
         run_demo()
         return
+
+    if args.command == "protect":
+        from .protect import protect_status, protect_watch, protect_workspace
+
+        workspace = Path(args.workspace).resolve()
+        if args.protect_command == "watch":
+            raise SystemExit(protect_watch(workspace, args.policy, args.interval))
+        if args.protect_command == "status":
+            raise SystemExit(protect_status(workspace))
+        # No subcommand = run setup
+        raise SystemExit(protect_workspace(workspace, args.policy))
+
+    if args.command == "cursor":
+        from .cursor import cursor_setup, cursor_watch
+
+        workspace = Path(args.workspace).resolve()
+        if args.cursor_command == "setup":
+            output = Path(args.output) if args.output else None
+            raise SystemExit(cursor_setup(workspace, args.policy, output))
+        if args.cursor_command == "watch":
+            raise SystemExit(cursor_watch(workspace, args.policy, args.interval))
+        raise SystemExit(1)
 
     if args.command == "proxy":
         from .proxy import proxy_setup, proxy_start, proxy_status, proxy_stop

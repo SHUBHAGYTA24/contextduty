@@ -30,6 +30,14 @@ def test_prompt_request_copilot():
     assert _is_prompt_request("copilot.github.com", "/v1/engines/copilot-codex/completions") is True
 
 
+def test_prompt_request_cursor():
+    assert _is_prompt_request("api2.cursor.sh", "/v1/chat/completions") is True
+
+
+def test_prompt_request_google_gemini():
+    assert _is_prompt_request("generativelanguage.googleapis.com", "/v1/models/gemini:generate") is True
+
+
 def test_prompt_request_embeddings_skipped():
     # embeddings path doesn't start with a prompt path
     assert _is_prompt_request("api.openai.com", "/v1/embeddings") is False

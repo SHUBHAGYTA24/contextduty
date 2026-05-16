@@ -98,7 +98,9 @@ def _normalize_extends(value: Any) -> list[str]:
         return [value]
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return value
-    raise PolicyValidationError("policy extends must be a string or list of strings", field="extends")
+    raise PolicyValidationError(
+        "policy extends must be a string or list of strings", field="extends"
+    )
 
 
 def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -136,7 +138,9 @@ def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dic
     base_ap = base.get("allow_patterns", {})
     override_ap = override.get("allow_patterns", {})
     if not isinstance(base_ap, dict) or not isinstance(override_ap, dict):
-        raise PolicyValidationError("policy allow_patterns must be an object of {detector: [pattern, ...]}")
+        raise PolicyValidationError(
+            "policy allow_patterns must be an object of {detector: [pattern, ...]}"
+        )
     merged_ap: dict[str, list[str]] = dict(base_ap)
     for key, patterns in override_ap.items():
         existing = merged_ap.get(key, [])
@@ -201,7 +205,9 @@ def _validate_allow_patterns(allow_patterns: dict[str, Any]) -> dict[str, list[s
         if not isinstance(detector_name, str) or not detector_name.strip():
             raise PolicyValidationError("allow_patterns keys must be non-empty strings")
         if not isinstance(patterns, list):
-            raise PolicyValidationError(f"allow_patterns['{detector_name}'] must be a list of regex strings")
+            raise PolicyValidationError(
+                f"allow_patterns['{detector_name}'] must be a list of regex strings"
+            )
         compiled: list[str] = []
         for i, pattern in enumerate(patterns):
             if not isinstance(pattern, str) or not pattern.strip():
@@ -245,13 +251,19 @@ def load_policy(path: Path | None) -> Policy:
         if not isinstance(name, str) or not name.strip():
             raise PolicyValidationError("custom detector names must be non-empty strings")
         if name in built_in_names:
-            raise PolicyValidationError(f"custom detector name '{name}' conflicts with built-in detector")
+            raise PolicyValidationError(
+                f"custom detector name '{name}' conflicts with built-in detector"
+            )
         if not isinstance(pattern, str) or not pattern.strip():
-            raise PolicyValidationError(f"custom detector '{name}' must have a non-empty regex string")
+            raise PolicyValidationError(
+                f"custom detector '{name}' must have a non-empty regex string"
+            )
         try:
             re.compile(pattern)
         except re.error as exc:
-            raise PolicyValidationError(f"invalid regex for custom detector '{name}': {exc}") from exc
+            raise PolicyValidationError(
+                f"invalid regex for custom detector '{name}': {exc}"
+            ) from exc
         custom_detectors[name] = pattern
 
     detectors = set(detectors_raw) | set(custom_detectors.keys())
@@ -263,7 +275,9 @@ def load_policy(path: Path | None) -> Policy:
 
     allow_patterns_raw = config.get("allow_patterns", {})
     if not isinstance(allow_patterns_raw, dict):
-        raise PolicyValidationError("policy allow_patterns must be an object of {detector: [pattern, ...]}")
+        raise PolicyValidationError(
+            "policy allow_patterns must be an object of {detector: [pattern, ...]}"
+        )
     allow_patterns = _validate_allow_patterns(allow_patterns_raw)
 
     return Policy(

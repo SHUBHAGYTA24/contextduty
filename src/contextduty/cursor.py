@@ -36,7 +36,6 @@ _HEADER = """\
 _FOOTER = "# ── AUTO-END ──\n"
 
 
-
 def cursor_setup(
     workspace: Path,
     policy_path: str | None = None,
@@ -108,7 +107,9 @@ def cursor_watch(
                     for f in sorted(removed)[:5]:
                         print(f"  {ts}  {style.green}-{style.reset} {f}")
                 if not last_state:
-                    print(f"  {ts}  {style.dim}Watching... {len(current_state)} files blocked{style.reset}")
+                    print(
+                        f"  {ts}  {style.dim}Watching... {len(current_state)} files blocked{style.reset}"
+                    )
                 else:
                     print(
                         f"  {ts}  {style.dim}Updated .cursorignore "
@@ -139,12 +140,7 @@ def _scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]
 
     for root, dirs, files in os.walk(workspace):
         # Skip hidden dirs and common non-source dirs
-        dirs[:] = [
-            d
-            for d in dirs
-            if not d.startswith(".")
-            and d not in SKIP_DIRECTORIES
-        ]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRECTORIES]
 
         for fname in files:
             fpath = Path(root) / fname

@@ -90,7 +90,6 @@ AI_TOOLS: list[AITool] = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-
 # ─────────────────────────────────────────────────────��───────────────────────
 # Public API
 # ────────────────────────────────────��───────────────────────────────────────���
@@ -144,7 +143,9 @@ def protect_workspace(
         _write_ignore_file(ignore_path, sensitive_files, workspace, tool)
         tools_written += 1
 
-    print(f"  {style.green}✓{style.reset}  Written {style.bold}{tools_written}{style.reset} ignore files:\n")
+    print(
+        f"  {style.green}✓{style.reset}  Written {style.bold}{tools_written}{style.reset} ignore files:\n"
+    )
     for tool in AI_TOOLS:
         if tool.has_ignore_file:
             exists = (out_dir / tool.ignore_file).exists()
@@ -267,7 +268,9 @@ def _print_coverage_status(workspace: Path) -> None:
                 f"  {style.green}✓{style.reset}  {tool.name:<25} {style.dim}{len(entries)} files blocked{style.reset}"
             )
         else:
-            print(f"  {style.red}✗{style.reset}  {tool.name:<25} {style.dim}not configured{style.reset}")
+            print(
+                f"  {style.red}✗{style.reset}  {tool.name:<25} {style.dim}not configured{style.reset}"
+            )
 
 
 def _load_policy(policy_path: str | None) -> Policy:
@@ -286,12 +289,7 @@ def _scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]
 
     for root, dirs, files in os.walk(workspace):
         # Skip hidden dirs, dependency dirs, build output
-        dirs[:] = [
-            d
-            for d in dirs
-            if not d.startswith(".")
-            and d not in SKIP_DIRECTORIES
-        ]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRECTORIES]
 
         for fname in files:
             fpath = Path(root) / fname

@@ -28,17 +28,23 @@ from .exceptions import (
 def __getattr__(name: str):  # noqa: C901
     """Lazy imports to avoid circular dependency with engine/policy."""
     _engine_names = {
-        "Finding", "ScanResult", "redact_file",
-        "report_to_json", "scan_dir", "scan_file",
+        "Finding",
+        "ScanResult",
+        "redact_file",
+        "report_to_json",
+        "scan_dir",
+        "scan_file",
     }
     _policy_names = {"Policy", "load_policy"}
 
     if name in _engine_names:
         import importlib
+
         mod = importlib.import_module("contextduty.engine")
         return getattr(mod, name)
     if name in _policy_names:
         import importlib
+
         mod = importlib.import_module("contextduty.policy")
         return getattr(mod, name)
     raise AttributeError(f"module 'contextduty.core' has no attribute {name!r}")

@@ -52,9 +52,7 @@ class ProxyNotInstalledError(ProxyError):
     """Raised when mitmproxy is not available."""
 
     def __init__(self):
-        super().__init__(
-            "mitmproxy not found. Install it: pip install 'contextduty[proxy]'"
-        )
+        super().__init__("mitmproxy not found. Install it: pip install 'contextduty[proxy]'")
 
 
 class ProxyAlreadyRunningError(ProxyError):

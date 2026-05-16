@@ -15,20 +15,18 @@ import logging
 import sys
 from pathlib import Path
 
-# When mitmproxy loads this file via `-s addon.py` it runs it as
-# __mitmproxy_script__, not as contextduty.proxy.addon — so relative
-# imports fail. We detect that and ensure the package is importable.
-if __name__ == "__mitmproxy_script__" or not __package__:
-    _pkg_root = Path(__file__).parent.parent.parent.parent
-    if str(_pkg_root) not in sys.path:
-        sys.path.insert(0, str(_pkg_root))
-    from contextduty.proxy.feed import record_interception
-    from contextduty.proxy.interceptor import redact_body
-    from contextduty.proxy.scope import is_prompt_request
-else:
-    from .feed import record_interception
-    from .interceptor import redact_body
-    from .scope import is_prompt_request
+# mitmproxy loads this file as a script via `-s addon.py`, which means
+# __package__ may be set incorrectly (or not at all), breaking relative
+# imports. We always inject the parent of the contextduty package into
+# sys.path and use absolute imports so this works in every load context:
+# regular package import, editable install, or mitmproxy script load.
+_src_root = Path(__file__).resolve().parent.parent.parent  # .../src/
+if str(_src_root) not in sys.path:
+    sys.path.insert(0, str(_src_root))
+
+from contextduty.proxy.feed import record_interception  # noqa: E402
+from contextduty.proxy.interceptor import redact_body  # noqa: E402
+from contextduty.proxy.scope import is_prompt_request  # noqa: E402
 
 log = logging.getLogger("contextduty.proxy")
 

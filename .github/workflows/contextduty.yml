@@ -1,0 +1,25 @@
+name: ContextDuty — secrets & PII scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  scan:
+    name: Scan for secrets and PII
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ContextDuty
+        run: pip install contextduty
+
+      - name: Scan source
+        run: contextduty scan src/ --policy .contextduty.json

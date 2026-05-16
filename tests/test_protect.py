@@ -66,12 +66,15 @@ def test_protect_clean_workspace_no_files(tmp_path, capsys):
 
 def test_protect_skips_hidden_and_vendor_dirs(tmp_path):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        ".git/config": f'key = {aws_key}',
-        "node_modules/pkg/x.js": f'k = "{aws_key}"',
-        "vendor/lib.go": f'k = "{aws_key}"',
-        "src/main.py": "print('clean')",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            ".git/config": f"key = {aws_key}",
+            "node_modules/pkg/x.js": f'k = "{aws_key}"',
+            "vendor/lib.go": f'k = "{aws_key}"',
+            "src/main.py": "print('clean')",
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert results == []

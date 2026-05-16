@@ -24,10 +24,13 @@ def _make_workspace(tmp_path: Path, files: dict[str, str]) -> Path:
 
 def test_scan_workspace_finds_aws_key(tmp_path):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        "config.py": f'AWS_KEY = "{aws_key}"',
-        "readme.md": "# Hello world",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "config.py": f'AWS_KEY = "{aws_key}"',
+            "readme.md": "# Hello world",
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert len(results) == 1
@@ -36,10 +39,13 @@ def test_scan_workspace_finds_aws_key(tmp_path):
 
 
 def test_scan_workspace_skips_clean_files(tmp_path):
-    ws = _make_workspace(tmp_path, {
-        "app.py": "print('hello world')",
-        "utils.py": "def add(a, b): return a + b",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "app.py": "print('hello world')",
+            "utils.py": "def add(a, b): return a + b",
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert results == []
@@ -47,10 +53,13 @@ def test_scan_workspace_skips_clean_files(tmp_path):
 
 def test_scan_workspace_skips_hidden_dirs(tmp_path):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        ".git/config": f'key = {aws_key}',
-        "src/main.py": "print('clean')",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            ".git/config": f"key = {aws_key}",
+            "src/main.py": "print('clean')",
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert results == []
@@ -58,10 +67,13 @@ def test_scan_workspace_skips_hidden_dirs(tmp_path):
 
 def test_scan_workspace_skips_node_modules(tmp_path):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        "node_modules/pkg/index.js": f'const k = "{aws_key}"',
-        "src/main.py": "print('clean')",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "node_modules/pkg/index.js": f'const k = "{aws_key}"',
+            "src/main.py": "print('clean')",
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert results == []
@@ -107,9 +119,12 @@ def test_matches_gitignore_basic():
 
 
 def test_cursor_setup_clean_workspace(tmp_path, capsys):
-    ws = _make_workspace(tmp_path, {
-        "app.py": "print('hello')",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "app.py": "print('hello')",
+        },
+    )
     rc = cursor_setup(ws)
     assert rc == 0
     captured = capsys.readouterr()
@@ -118,10 +133,13 @@ def test_cursor_setup_clean_workspace(tmp_path, capsys):
 
 def test_cursor_setup_writes_cursorignore(tmp_path, capsys):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        "config.py": f'KEY = "{aws_key}"',
-        "app.py": "print('ok')",
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "config.py": f'KEY = "{aws_key}"',
+            "app.py": "print('ok')",
+        },
+    )
     rc = cursor_setup(ws)
     assert rc == 0
 
@@ -133,9 +151,12 @@ def test_cursor_setup_writes_cursorignore(tmp_path, capsys):
 
 def test_scan_workspace_detects_multiple_types(tmp_path):
     aws_key = "AKIA" + "IOSFODNN7EXAMPLE"
-    ws = _make_workspace(tmp_path, {
-        "config.py": f'KEY = "{aws_key}"\nEMAIL = "admin@secret.com"',
-    })
+    ws = _make_workspace(
+        tmp_path,
+        {
+            "config.py": f'KEY = "{aws_key}"\nEMAIL = "admin@secret.com"',
+        },
+    )
     policy = load_policy(None)
     results = _scan_workspace(ws, policy)
     assert len(results) == 1

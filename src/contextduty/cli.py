@@ -155,13 +155,17 @@ def _parser() -> argparse.ArgumentParser:
     cs = cursor_sub.add_parser("setup", help="Scan workspace and generate .cursorignore.")
     cs.add_argument("--workspace", default=".", help="Workspace root (default: current dir).")
     cs.add_argument("--policy", default=None, help="Policy file path.")
-    cs.add_argument("--output", default=None, help="Output path (default: <workspace>/.cursorignore).")
+    cs.add_argument(
+        "--output", default=None, help="Output path (default: <workspace>/.cursorignore)."
+    )
 
     # cursor watch
     cw = cursor_sub.add_parser("watch", help="Watch workspace and auto-update .cursorignore.")
     cw.add_argument("--workspace", default=".", help="Workspace root (default: current dir).")
     cw.add_argument("--policy", default=None, help="Policy file path.")
-    cw.add_argument("--interval", type=int, default=30, help="Scan interval in seconds (default: 30).")
+    cw.add_argument(
+        "--interval", type=int, default=30, help="Scan interval in seconds (default: 30)."
+    )
 
     # ── proxy ─────────────────────────────────────────────────────────────────
     proxy_parser = subparsers.add_parser(

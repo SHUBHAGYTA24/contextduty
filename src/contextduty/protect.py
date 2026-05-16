@@ -24,6 +24,7 @@ from pathlib import Path
 
 from .engine import _BINARY_EXTENSIONS, _active_detectors, _scan_line
 from .policy import Policy, load_policy
+from .proxy.scope import AI_API_HOSTS
 
 # ──────────���──────────────────────────────────────��───────────────────────────
 # AI Tool Registry — add new tools here. That's it. Everything else is generic.
@@ -78,49 +79,8 @@ AI_TOOLS: list[AITool] = [
     ),
 ]
 
-# HTTPS proxy host registry — intercepts API calls from ANY tool.
-# This is the downstream safety net. Even if an AI tool doesn't support
-# ignore files, the proxy catches secrets in the actual API request.
-AI_API_HOSTS: dict[str, str] = {
-    # Cursor
-    "api2.cursor.sh": "Cursor",
-    "cursor.sh": "Cursor",
-    # Anthropic / Claude
-    "api.anthropic.com": "Claude API",
-    # OpenAI
-    "api.openai.com": "OpenAI / ChatGPT",
-    # GitHub Copilot
-    "copilot.github.com": "GitHub Copilot",
-    "api.githubcopilot.com": "GitHub Copilot",
-    "copilot-proxy.githubusercontent.com": "GitHub Copilot",
-    # Google
-    "generativelanguage.googleapis.com": "Google Gemini",
-    "aiplatform.googleapis.com": "Google Vertex AI",
-    # Azure
-    "openai.azure.com": "Azure OpenAI",
-    # Codeium / Windsurf
-    "server.codeium.com": "Codeium",
-    # Amazon
-    "codewhisperer.us-east-1.amazonaws.com": "CodeWhisperer",
-    # Sourcegraph
-    "sourcegraph.com": "Sourcegraph Cody",
-    # Tabnine
-    "api.tabnine.com": "Tabnine",
-    # Perplexity (developers use it for code)
-    "api.perplexity.ai": "Perplexity",
-    # Mistral
-    "api.mistral.ai": "Mistral",
-    # Groq
-    "api.groq.com": "Groq",
-    # Together AI
-    "api.together.xyz": "Together AI",
-    # Fireworks AI
-    "api.fireworks.ai": "Fireworks AI",
-    # Cohere
-    "api.cohere.ai": "Cohere",
-    # DeepSeek
-    "api.deepseek.com": "DeepSeek",
-}
+# HTTPS proxy host registry — single source of truth in proxy/scope.py.
+# Imported at top of file, re-exported here for public API.
 
 
 # ──────────────────���──────────────────────────��───────────────────────────────
@@ -168,7 +128,9 @@ def protect_workspace(
         return 0
 
     # Report findings
-    print(f"  {_YELLOW}⚠{_RESET}  {_BOLD}{len(sensitive_files)}{_RESET} file(s) contain secrets/PII:\n")
+    print(
+        f"  {_YELLOW}⚠{_RESET}  {_BOLD}{len(sensitive_files)}{_RESET} file(s) contain secrets/PII:\n"
+    )
     for fpath, detectors in sensitive_files[:15]:
         det_str = ", ".join(sorted(detectors))
         print(f"     {fpath}  {_DIM}[{det_str}]{_RESET}")
@@ -271,7 +233,7 @@ def protect_status(workspace: Path) -> int:
     _print_coverage_status(workspace)
 
     # Check proxy
-    from .proxy import _is_running, _read_pid
+    from .proxy.server import _is_running, _read_pid
 
     print(f"\n  {_BOLD}HTTPS Proxy (downstream interception){_RESET}\n")
     if _is_running():
@@ -307,8 +269,7 @@ def _print_coverage_status(workspace: Path) -> None:
                 if line.strip() and not line.strip().startswith("#")
             ]
             print(
-                f"  {_GREEN}✓{_RESET}  {tool.name:<25} "
-                f"{_DIM}{len(entries)} files blocked{_RESET}"
+                f"  {_GREEN}✓{_RESET}  {tool.name:<25} {_DIM}{len(entries)} files blocked{_RESET}"
             )
         else:
             print(f"  {_RED}✗{_RESET}  {tool.name:<25} {_DIM}not configured{_RESET}")

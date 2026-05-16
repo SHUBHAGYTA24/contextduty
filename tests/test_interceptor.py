@@ -66,9 +66,7 @@ def test_extract_cursor_context_files():
 
 def test_extract_cursor_selection():
     body = {
-        "context": {
-            "selection": "password = 's3cr3t_admin_pass'"
-        },
+        "context": {"selection": "password = 's3cr3t_admin_pass'"},
         "messages": [{"role": "user", "content": "refactor this"}],
     }
     results = extract_texts(body, "api2.cursor.sh")
@@ -155,9 +153,7 @@ def test_extract_openai_content_blocks():
 
 
 def test_setter_modifies_body_in_place():
-    body = {
-        "messages": [{"role": "user", "content": "secret: AKIAEXAMPLE123456"}]
-    }
+    body = {"messages": [{"role": "user", "content": "secret: AKIAEXAMPLE123456"}]}
     results = extract_texts(body, "api.openai.com")
     for text, setter in results:
         if "AKIA" in text:

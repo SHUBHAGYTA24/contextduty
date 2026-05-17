@@ -8,16 +8,17 @@ version = "0.2.3"
 description = "Policy-driven context firewall for AI workflows — scan and redact sensitive data before prompts, logs, or traces leave your environment."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-  { name = "ContextDuty Contributors" }
+  { name = "ContextDuty Contributors", email = "shubhagytajayswal@gmail.com" }
 ]
 keywords = [
   "security", "pii", "redaction", "ai", "llm", "mcp",
   "prompt", "privacy", "devsecops", "secrets"
 ]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -67,15 +68,10 @@ select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 [tool.ruff.lint.per-file-ignores]
 "src/contextduty/dashboard.py" = ["E501"]
 "src/contextduty/demo.py" = ["E501"]
-"src/contextduty/proxy.py" = ["E501"]
-"src/contextduty/proxy_addon.py" = ["E501"]
 "src/contextduty/cli.py" = ["E501"]
 "src/contextduty/cursor.py" = ["E501"]
 "src/contextduty/protect.py" = ["E501"]
-"tests/test_proxy_addon.py" = ["E501"]
-"tests/test_protect.py" = ["E501"]
-"src/contextduty/interceptor.py" = ["E501"]
-"src/contextduty/feed.py" = ["E501"]
-"tests/test_interceptor.py" = ["E501"]
 "src/contextduty/policy.py" = ["E501"]
-"tests/test_cursor.py" = ["E501"]
+"src/contextduty/proxy/addon.py" = ["E501"]
+"src/contextduty/proxy/interceptor.py" = ["E501"]
+"src/contextduty/proxy/feed.py" = ["E501"]

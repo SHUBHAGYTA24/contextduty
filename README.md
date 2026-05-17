@@ -27,41 +27,42 @@ contextduty proxy start    # intercepts HTTPS traffic to 21 AI APIs
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        YOUR WORKSPACE                                │
-│                                                                     │
-│  .env  config.py  fixtures/  keys/  terraform.tfvars               │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-            ┌───────────────┼───────────────┐
-            │               │               │
-            ▼               ▼               ▼
-┌─────────────────��┐ ┌────────────┐ ┌──────────────────┐
-│  LAYER 1         │ │  LAYER 2   │ │  LAYER 3         │
-│  Upstream Block  │ │  Git Hook  │ │  HTTPS Proxy     │
-│                  │ │            │ │                   │
-│ .cursorignore    │ │ pre-commit │ │ Intercepts 21    │
-│ .copilotignore   │ │ blocks     │ │ AI API endpoints │
-│ .codeiumignore   │ │ commits    │ │ Redacts secrets  │
-│ .tabnine_ignore  │ │ with       │ │ in-flight before │
-│ .amazonq/ignore  │ │ secrets    │ │ they reach any   │
-│ .cody/ignore     │ │            │ │ AI model         │
-└──────────────────┘ └────────────┘ └──────────────────┘
-            │               │               │
-            ▼               ▼               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   AI TOOLS (all protected)                           │
-│  Cursor  ·  Copilot  ·  Claude  ·  Windsurf  ·  Cody  ·  Amazon Q │
-│  + any future tool that reads workspaces or calls AI APIs           │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    WS["🗂️  YOUR WORKSPACE\n.env · config.py · keys/ · terraform.tfvars"]
+
+    WS --> L1 & L2 & L3 & L4 & L5
+
+    L1["🛡️  Layer 1 — Workspace Ignore\n────────────────────────\n.cursorignore\n.copilotignore\n.codeiumignore\n.tabnine_ignore\n.amazonq/ignore\n.cody/ignore\n\nBlocks 6 AI tools from\never indexing secret files"]
+
+    L2["🔒  Layer 2 — Git Hook\n────────────────────────\npre-commit scan\n\nBlocks commits that\ncontain secrets before\nthey enter git history"]
+
+    L3["🌐  Layer 3 — HTTPS Proxy\n────────────────────────\n21 AI API endpoints\n\nRedacts secrets from\nrequest bodies in-flight\nbefore they leave machine"]
+
+    L4["🤖  Layer 4 — MCP Server\n────────────────────────\nCursor · Claude · VS Code\n\nScans tool-call responses\nbefore they enter the\nAI context window"]
+
+    L5["⚙️  Layer 5 — CI/CD\n────────────────────────\nGitHub Actions\n\nBlocks PRs that contain\nsecrets — policy-as-code\nenforcement in pipeline"]
+
+    L1 & L2 & L3 & L4 & L5 --> AI
+
+    AI["✅  AI TOOLS — ALL PROTECTED\nCursor · Copilot · Claude · Windsurf · Cody · Amazon Q\nOpenAI · Anthropic · Gemini · Azure OpenAI · and 11 more"]
+
+    style WS fill:#1e1e2e,stroke:#6c6f85,color:#cdd6f4
+    style L1 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
+    style L2 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
+    style L3 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
+    style L4 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
+    style L5 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
+    style AI fill:#1a3a1a,stroke:#a6e3a1,color:#cdd6f4
 ```
 
-**Layer 1 — Upstream Block:** Generates ignore files for 6 AI tools so they never index sensitive files.  
-**Layer 2 — Git Hook:** Pre-commit scan blocks secrets from entering version history.  
-**Layer 3 — HTTPS Proxy:** Intercepts all AI API traffic and redacts secrets from the request body in real-time.
-
-Plus: **MCP server** for Cursor/Claude tool-call interception, **CI/CD integration**, and **audit dashboard**.
+| Layer | What it does |
+|---|---|
+| **1 — Workspace Ignore** | Generates ignore files for 6 AI tools — secrets never get indexed |
+| **2 — Git Hook** | Pre-commit scan blocks secrets from entering version history |
+| **3 — HTTPS Proxy** | Intercepts 21 AI API endpoints, redacts secrets in-flight |
+| **4 — MCP Server** | Scans tool-call responses before they enter the AI context window |
+| **5 — CI/CD** | Policy-as-code enforcement — PRs with secrets cannot merge |
 
 ---
 
@@ -96,35 +97,12 @@ contextduty proxy start          # start intercepting
 
 ---
 
-## See it in 20 seconds
+## See it in action
 
-```
-$ contextduty demo
+![ContextDuty demo — scan, redact, protect, block](demo/contextduty-demo.gif)
 
-▶ Scene 1 — Developer creates config.py with real credentials
-
-  DATABASE_URL = "postgresql://admin:Sup3rS3cr3t!@prod-db.internal:5432/customers"
-  AWS_ACCESS_KEY_ID     = "AKIAIOSFODNN7EXAMPLE"
-  OPENAI_API_KEY = "sk-proj-EXAMPLEcontextdutyDEMO..."
-
-▶ Scene 2 — Scanning → 6 findings detected
-
-▶ Scene 3 — Redacting (safe to pass to AI)
-
-  DATABASE_URL = "<DB_DSN_33213ab6f0>"
-  AWS_ACCESS_KEY_ID     = "<AWS_KEY_1a5d44a2dc>"
-  OPENAI_API_KEY = "<OPENAI_KEY_5f04681e46>"
-
-✓ Real values replaced with deterministic masks — safe to paste into any AI tool
-
-▶ Scene 4 — Pre-commit hook blocks the commit
-
-  [ContextDuty] BLOCKED: config.py
-    aws_key: 1 finding(s)
-    openai_key: 1 finding(s)
-
-✓ Commit rejected — secrets never entered git history
-```
+> Secrets detected → redacted with deterministic masks → commit blocked → AI tools protected.  
+> Run it yourself: `contextduty demo`
 
 ---
 

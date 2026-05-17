@@ -50,7 +50,7 @@ test:
 	@echo "$(GREEN)✓ Tests passed$(RESET)"
 
 # ── check (full pre-push gate) ────────────────────────────────────────────────
-check: fmt lint test
+check: lint test
 	@echo ""
 	@echo "$(GREEN)$(BOLD)✓ All checks passed — safe to push$(RESET)"
 

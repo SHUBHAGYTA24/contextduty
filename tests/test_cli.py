@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 
@@ -24,8 +25,7 @@ def run(*args, input_text: str | None = None) -> subprocess.CompletedProcess:
 def test_version_flag():
     result = run("--version")
     assert result.returncode == 0
-    import re
-    assert re.search(r"\d+\.\d+\.\d+", result.stdout), "version output should contain a semver string"
+    assert re.search(r"\d+\.\d+\.\d+", result.stdout), "should contain semver"
 
 
 # ---------------------------------------------------------------------------

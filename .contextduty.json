@@ -1,0 +1,31 @@
+{
+  "mode": "redact",
+  "detectors": [
+    "email",
+    "phone",
+    "api_key",
+    "bearer_token",
+    "aws_key",
+    "aws_secret",
+    "gcp_service_account",
+    "github_pat",
+    "openai_key",
+    "anthropic_key",
+    "huggingface_token",
+    "slack_token",
+    "stripe_webhook",
+    "sendgrid_key",
+    "mailchimp_key",
+    "npm_token",
+    "twilio_sid",
+    "azure_storage_key",
+    "google_oauth_token",
+    "db_dsn",
+    "ssh_private_key",
+    "pgp_private_key",
+    "private_key_pem",
+    "jwt",
+    "env_secret"
+  ],
+  "custom_detectors": {}
+}

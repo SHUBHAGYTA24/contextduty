@@ -10,8 +10,7 @@ build/
 .ruff_cache/
 *.so
 
-# Local policy and demo artifacts
-.contextduty.json
+# Demo artifacts
 *.demo.json
 demo/live/*.json
 demo/live/*-clean.txt

@@ -1,7 +1,7 @@
 """ContextDuty — policy-driven context firewall for AI workflows."""
 
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
 
     __version__ = version("contextduty")
 except PackageNotFoundError:

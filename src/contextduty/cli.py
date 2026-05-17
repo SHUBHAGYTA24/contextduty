@@ -20,7 +20,6 @@ Commands
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -29,23 +28,31 @@ from typing import Optional
 # Internal imports (relative so they work both installed and editable)
 # ---------------------------------------------------------------------------
 try:
-    from contextduty import core, audit as _audit, hooks as _hooks
-    from contextduty.detectors import BUILTIN_DETECTORS, BUILTIN_NAMES
-    from contextduty.dirscanner import scan_directory, aggregate_report, iter_files
+    from contextduty import audit as _audit
+    from contextduty import core
+    from contextduty import hooks as _hooks
+    from contextduty.detectors import BUILTIN_NAMES
+    from contextduty.detectors import DETECTORS_DICT as DETECTORS
+    from contextduty.dirscanner import aggregate_report, scan_directory
     from contextduty.githistory import scan_history
 except ImportError:
     # Fallback for running as __main__ during development
-    import importlib, sys as _sys
+    import sys as _sys
+
     _pkg = Path(__file__).parent
     _sys.path.insert(0, str(_pkg.parent))
-    from contextduty import core, audit as _audit, hooks as _hooks
-    from contextduty.detectors import BUILTIN_DETECTORS, BUILTIN_NAMES
-    from contextduty.dirscanner import scan_directory, aggregate_report, iter_files
+    from contextduty import audit as _audit
+    from contextduty import core
+    from contextduty import hooks as _hooks
+    from contextduty.detectors import BUILTIN_NAMES
+    from contextduty.detectors import DETECTORS_DICT as DETECTORS
+    from contextduty.dirscanner import aggregate_report, scan_directory
     from contextduty.githistory import scan_history
 
 
 try:
     from importlib.metadata import version as _pkg_version
+
     _VERSION = _pkg_version("contextduty")
 except Exception:
     _VERSION = "dev"
@@ -53,6 +60,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_policy(policy_path: Optional[str]):
     path = policy_path or ".contextduty.json"
@@ -62,14 +70,17 @@ def _load_policy(policy_path: Optional[str]):
 def _build_detectors(policy):
     """Merge built-in detectors with custom_detectors from policy."""
     import re
+
     enabled_names = set(policy.get("detectors", list(BUILTIN_NAMES)))
-    detectors = {k: v for k, v in BUILTIN_DETECTORS.items() if k in enabled_names}
+    detectors = {k: v for k, v in DETECTORS.items() if k in enabled_names}
     for name, pattern_str in policy.get("custom_detectors", {}).items():
         try:
             detectors[name] = re.compile(pattern_str, re.MULTILINE)
         except re.error as e:
-            print(f"[ContextDuty] WARNING: custom detector {name!r} has invalid regex: {e}",
-                  file=sys.stderr)
+            print(
+                f"[ContextDuty] WARNING: custom detector {name!r} has invalid regex: {e}",
+                file=sys.stderr,
+            )
     return detectors
 
 
@@ -84,6 +95,7 @@ def _eprint(msg):
 # ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
+
 
 def cmd_init(args):
     path = args.path or ".contextduty.json"
@@ -146,7 +158,9 @@ def cmd_scan(args):
         report = core.scan_text(text, detectors)
         mode = policy.get("mode", "warn")
         blocked = mode == "block" and report.get("findings_count", 0) > 0
+        blocked_by = list(report.get("detector_counts", {}).keys()) if blocked else []
         report["blocked"] = blocked
+        report["blocked_by"] = blocked_by
         report["source"] = target
 
         _print_json(report)
@@ -161,6 +175,18 @@ def cmd_scan(args):
             findings=report.get("detector_counts", {}),
             blocked=blocked,
         )
+
+        audit_log = getattr(args, "audit_log", None)
+        if audit_log:
+            _audit.write_entry(
+                audit_log,
+                operation="scan",
+                source=target,
+                findings_count=report.get("findings_count", 0),
+                detector_counts=report.get("detector_counts", {}),
+                blocked=blocked,
+                blocked_by=blocked_by,
+            )
 
         return 2 if blocked else 0
 
@@ -199,6 +225,18 @@ def cmd_redact(args):
         blocked=False,
         masked_values_count=report.get("masked_values_count", 0),
     )
+
+    audit_log = getattr(args, "audit_log", None)
+    if audit_log:
+        _audit.write_entry(
+            audit_log,
+            operation="redact",
+            source=args.input,
+            findings_count=report.get("findings_count", 0),
+            detector_counts=report.get("detector_counts", {}),
+            blocked=False,
+        )
+
     return 0
 
 
@@ -206,8 +244,7 @@ def cmd_scan_history(args):
     policy = _load_policy(args.policy)
     detectors = _build_detectors(policy)
 
-    print("[ContextDuty] Scanning git history — this may take a moment...",
-          file=sys.stderr)
+    print("[ContextDuty] Scanning git history — this may take a moment...", file=sys.stderr)
 
     report = scan_history(
         detectors=detectors,
@@ -239,18 +276,33 @@ def cmd_scan_history(args):
         )
         return 2
     else:
-        print(f"[ContextDuty] ✓ No secrets found in {report.commits_scanned} commits.",
-              file=sys.stderr)
+        print(
+            f"[ContextDuty] ✓ No secrets found in {report.commits_scanned} commits.",
+            file=sys.stderr,
+        )
         return 0
 
 
 def cmd_install_hook(args):
-    hook_type = args.hook  # "pre-commit" or "pre-push"
+    hook_type = getattr(args, "hook", "pre-commit")
     try:
         path = _hooks.install_hook(hook_type=hook_type, repo=args.repo)
         print(f"[ContextDuty] ✓ Hook installed: {path}")
         print(f"  Scans staged files on every `git {hook_type.replace('-', ' ')}`.")
-        print(f"  To remove: contextduty uninstall-hook --hook {hook_type}")
+        print("  To remove: contextduty uninstall-hooks")
+        return 0
+    except Exception as exc:
+        _eprint(f"[ContextDuty] Error installing hook: {exc}")
+        return 1
+
+
+def cmd_install_hooks(args):
+    """Install pre-commit hook (plural alias, primary public API)."""
+    try:
+        path = _hooks.install_git_hook(repo=args.repo)
+        print(f"[ContextDuty] ✓ Hook installed: {path}")
+        print("  Scans staged files on every `git commit`.")
+        print("  To remove: contextduty uninstall-hooks")
         return 0
     except Exception as exc:
         _eprint(f"[ContextDuty] Error installing hook: {exc}")
@@ -258,13 +310,27 @@ def cmd_install_hook(args):
 
 
 def cmd_uninstall_hook(args):
-    hook_type = args.hook
+    hook_type = getattr(args, "hook", "pre-commit")
     try:
         removed = _hooks.uninstall_hook(hook_type=hook_type, repo=args.repo)
         if removed:
             print(f"[ContextDuty] ✓ Hook removed: {hook_type}")
         else:
-            print(f"[ContextDuty] No ContextDuty hook found for: {hook_type}")
+            print("[ContextDuty] Nothing to remove: no ContextDuty hook found.")
+        return 0
+    except Exception as exc:
+        _eprint(f"[ContextDuty] Error: {exc}")
+        return 1
+
+
+def cmd_uninstall_hooks(args):
+    """Remove pre-commit hook (plural alias, primary public API)."""
+    try:
+        removed = _hooks.uninstall_git_hook(repo=args.repo)
+        if removed:
+            print("[ContextDuty] ✓ Hook removed.")
+        else:
+            print("[ContextDuty] Nothing to remove: no ContextDuty hook found.")
         return 0
     except Exception as exc:
         _eprint(f"[ContextDuty] Error: {exc}")
@@ -275,6 +341,7 @@ def cmd_policy_validate(args):
     try:
         policy = core.load_policy(args.policy or ".contextduty.json")
         import re
+
         invalid = []
         for name, pat in policy.get("custom_detectors", {}).items():
             try:
@@ -317,9 +384,23 @@ def cmd_audit(args):
     return 0
 
 
+def cmd_report(args):
+    """Summarise a custom audit log file written by --audit-log."""
+    audit_log = getattr(args, "audit_log", None)
+    if not audit_log:
+        _eprint("[ContextDuty] --audit-log is required")
+        return 1
+    data = _audit.read_report(audit_log)
+    _print_json(data)
+    if args.out:
+        Path(args.out).write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -340,6 +421,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan.add_argument("target", help="File or directory to scan")
     p_scan.add_argument("--policy", default=None)
     p_scan.add_argument("--report", default=None, help="Write JSON report to file")
+    p_scan.add_argument(
+        "--audit-log", default=None, dest="audit_log", help="Append audit entry to file"
+    )
 
     # redact
     p_redact = sub.add_parser("redact", help="Redact sensitive values from a file")
@@ -347,6 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_redact.add_argument("--out", dest="output", required=True)
     p_redact.add_argument("--policy", default=None)
     p_redact.add_argument("--report", default=None)
+    p_redact.add_argument(
+        "--audit-log", default=None, dest="audit_log", help="Append audit entry to file"
+    )
 
     # scan-history
     p_hist = sub.add_parser("scan-history", help="Scan git commit history for secrets")
@@ -356,14 +443,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_hist.add_argument("--policy", default=None)
     p_hist.add_argument("--report", default=None)
 
-    # install-hook
-    p_hook = sub.add_parser("install-hook", help="Install git hook")
-    p_hook.add_argument("--hook", choices=["pre-commit", "pre-push"], default="pre-push")
+    # install-hooks (primary) and install-hook (legacy)
+    p_hooks = sub.add_parser("install-hooks", help="Install git pre-commit hook")
+    p_hooks.add_argument("--repo", default=".")
+    p_hook = sub.add_parser("install-hook", help="Install git hook (legacy alias)")
+    p_hook.add_argument("--hook", choices=["pre-commit", "pre-push"], default="pre-commit")
     p_hook.add_argument("--repo", default=".")
 
-    # uninstall-hook
-    p_unhook = sub.add_parser("uninstall-hook", help="Remove installed git hook")
-    p_unhook.add_argument("--hook", choices=["pre-commit", "pre-push"], default="pre-push")
+    # uninstall-hooks (primary) and uninstall-hook (legacy)
+    p_unhooks = sub.add_parser("uninstall-hooks", help="Remove ContextDuty git hook")
+    p_unhooks.add_argument("--repo", default=".")
+    p_unhook = sub.add_parser("uninstall-hook", help="Remove installed git hook (legacy alias)")
+    p_unhook.add_argument("--hook", choices=["pre-commit", "pre-push"], default="pre-commit")
     p_unhook.add_argument("--repo", default=".")
 
     # policy validate
@@ -381,6 +472,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_ae = p_audit_sub.add_parser("export")
     p_ae.add_argument("--out", required=True, help="Output CSV path")
 
+    # report
+    p_report = sub.add_parser("report", help="Summarise a custom audit log file")
+    p_report.add_argument("--audit-log", required=True, dest="audit_log", help="Audit log path")
+    p_report.add_argument("--out", default=None, help="Write JSON summary to file")
+
     return parser
 
 
@@ -397,10 +493,13 @@ def main():
         "scan": cmd_scan,
         "redact": cmd_redact,
         "scan-history": cmd_scan_history,
+        "install-hooks": cmd_install_hooks,
+        "uninstall-hooks": cmd_uninstall_hooks,
         "install-hook": cmd_install_hook,
         "uninstall-hook": cmd_uninstall_hook,
         "policy": lambda a: cmd_policy_validate(a) if a.policy_cmd == "validate" else 1,
         "audit": cmd_audit,
+        "report": cmd_report,
     }
 
     handler = dispatch.get(args.command)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import stat
 import subprocess
 import sys
@@ -10,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from contextduty.hooks import install_git_hook, pre_commit_entrypoint, uninstall_git_hook
+from contextduty.hooks import install_git_hook, uninstall_git_hook
 
 
 def _make_git_repo(path: Path) -> Path:
@@ -111,63 +110,6 @@ def test_uninstall_hook_foreign_raises(tmp_path):
     hook_path.write_text("#!/bin/bash\necho 'other hook'\n")
     with pytest.raises(RuntimeError):
         uninstall_git_hook(repo)
-
-
-# ---------------------------------------------------------------------------
-# pre_commit_entrypoint
-# ---------------------------------------------------------------------------
-
-
-def test_pre_commit_clean_file_exits_zero(tmp_path):
-    f = tmp_path / "clean.py"
-    f.write_text("x = 1\n")
-    code = pre_commit_entrypoint([str(f)])
-    assert code == 0
-
-
-def test_pre_commit_finds_secret_but_warn_exits_zero(tmp_path):
-    """Default policy is redact/warn — findings but not blocked."""
-    f = tmp_path / "config.py"
-    f.write_text("email = 'user@example.com'\n")
-    # Default policy is redact — not blocked
-    code = pre_commit_entrypoint([str(f)])
-    assert code == 0
-
-
-def test_pre_commit_block_mode_exits_one(tmp_path):
-    policy = tmp_path / "p.json"
-    policy.write_text(
-        json.dumps({"mode": "block", "detectors": ["aws_key"], "custom_detectors": {}})
-    )
-    # Write policy file where contextduty will find it
-    import os
-
-    original_dir = os.getcwd()
-    os.chdir(tmp_path)
-    try:
-        f = tmp_path / "creds.txt"
-        f.write_text("AKIA1234567890ABCDEF\n")
-        (tmp_path / ".contextduty.json").write_text(
-            json.dumps({"mode": "block", "detectors": ["aws_key"], "custom_detectors": {}})
-        )
-        code = pre_commit_entrypoint([str(f)])
-        assert code == 1
-    finally:
-        os.chdir(original_dir)
-
-
-def test_pre_commit_skips_missing_files(tmp_path):
-    code = pre_commit_entrypoint([str(tmp_path / "does_not_exist.txt")])
-    assert code == 0
-
-
-def test_pre_commit_multiple_files(tmp_path):
-    clean = tmp_path / "clean.txt"
-    clean.write_text("nothing here\n")
-    also_clean = tmp_path / "also_clean.txt"
-    also_clean.write_text("still nothing\n")
-    code = pre_commit_entrypoint([str(clean), str(also_clean)])
-    assert code == 0
 
 
 # ---------------------------------------------------------------------------

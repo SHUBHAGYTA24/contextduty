@@ -51,9 +51,22 @@ def _active_detectors(policy: Policy) -> list[Detector]:
 
 
 def _scan_line(line: str, detectors: Iterable[Detector]) -> list[Finding]:
+    """Scan a single line, deduplicating overlapping matches.
+
+    Detectors are ordered most-specific → least-specific. When a more specific
+    detector already claimed a span, generic detectors that overlap that span
+    are skipped so one secret counts as one finding.
+    """
     findings: list[Finding] = []
+    claimed: list[tuple[int, int]] = []  # (start, end) spans already matched
+
     for detector in detectors:
         for match in detector.pattern.finditer(line):
+            start, end = match.start(), match.end()
+            # Skip if any existing claimed span overlaps this one
+            if any(s < end and start < e for s, e in claimed):
+                continue
+            claimed.append((start, end))
             findings.append(Finding(detector=detector.name, value=match.group(0)))
     return findings
 

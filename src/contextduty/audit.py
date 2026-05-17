@@ -24,12 +24,13 @@ Schema per record:
 }
 """
 
+import getpass
 import json
-import os
+import socket
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 _SESSION_ID = str(uuid.uuid4())
 _AUDIT_DIR = Path.home() / ".contextduty"
@@ -37,6 +38,7 @@ _AUDIT_FILE = _AUDIT_DIR / "audit.jsonl"
 
 try:
     from importlib.metadata import version as _pkg_version
+
     _VERSION = _pkg_version("contextduty")
 except Exception:
     _VERSION = "dev"
@@ -114,9 +116,7 @@ def summary() -> Dict[str, Any]:
             "total_scans": len(records),
             "total_findings": total_findings,
             "total_blocked": blocked,
-            "top_detectors": dict(
-                sorted(detector_totals.items(), key=lambda x: -x[1])[:10]
-            ),
+            "top_detectors": dict(sorted(detector_totals.items(), key=lambda x: -x[1])[:10]),
             "audit_file": str(_AUDIT_FILE),
         }
     except Exception:
@@ -126,6 +126,7 @@ def summary() -> Dict[str, Any]:
 def export_csv(out_path: str) -> int:
     """Export audit log to CSV. Returns number of rows written."""
     import csv
+
     records_list = []
     if _AUDIT_FILE.exists():
         for ln in _AUDIT_FILE.read_text(encoding="utf-8").splitlines():
@@ -136,10 +137,118 @@ def export_csv(out_path: str) -> int:
                     pass
     if not records_list:
         return 0
-    fieldnames = ["ts", "op", "source", "policy_mode", "findings_count",
-                  "blocked", "masked_values_count", "session_id", "version"]
+    fieldnames = [
+        "ts",
+        "op",
+        "source",
+        "policy_mode",
+        "findings_count",
+        "blocked",
+        "masked_values_count",
+        "session_id",
+        "version",
+    ]
     with open(out_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(records_list)
     return len(records_list)
+
+
+# ---------------------------------------------------------------------------
+# Custom-path audit log (used by CLI --audit-log flag)
+# ---------------------------------------------------------------------------
+
+
+def write_entry(
+    path: str,
+    *,
+    operation: str,
+    source: str,
+    findings_count: int,
+    detector_counts: Dict[str, int],
+    blocked: bool,
+    blocked_by: Optional[List[str]] = None,
+) -> None:
+    """Append one record to a custom audit log file.
+
+    Uses the schema expected by the ``contextduty report`` command:
+        {"operation", "ts", "user", "hostname", "source",
+         "findings_count", "detector_counts", "blocked", "blocked_by"}
+    """
+    try:
+        log_path = Path(path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        entry: Dict[str, Any] = {
+            "operation": operation,
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "user": _safe_getuser(),
+            "hostname": _safe_hostname(),
+            "source": source,
+            "findings_count": findings_count,
+            "detector_counts": detector_counts,
+            "blocked": blocked,
+            "blocked_by": blocked_by or [],
+        }
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass  # audit failures must never break the tool
+
+
+def read_report(path: str) -> Dict[str, Any]:
+    """Summarise all entries in a custom audit log file.
+
+    Returns:
+        {
+            "total_scans": int,
+            "total_findings": int,
+            "detector_totals": {name: count},
+            "total_blocked": int,
+            "block_rate_pct": float,
+        }
+    """
+    log_path = Path(path)
+    if not log_path.exists():
+        return {"error": f"Audit log not found: {path}"}
+
+    records: List[Dict[str, Any]] = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            try:
+                records.append(json.loads(line))
+            except Exception:
+                pass
+
+    detector_totals: Dict[str, int] = {}
+    total_blocked = 0
+    total_findings = 0
+    for r in records:
+        total_findings += r.get("findings_count", 0)
+        if r.get("blocked"):
+            total_blocked += 1
+        for det, cnt in r.get("detector_counts", {}).items():
+            detector_totals[det] = detector_totals.get(det, 0) + cnt
+
+    n = len(records)
+    return {
+        "total_scans": n,
+        "total_findings": total_findings,
+        "detector_totals": detector_totals,
+        "total_blocked": total_blocked,
+        "block_rate_pct": round(100.0 * total_blocked / n, 1) if n > 0 else 0.0,
+    }
+
+
+def _safe_getuser() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
+
+
+def _safe_hostname() -> str:
+    try:
+        return socket.gethostname()
+    except Exception:
+        return "unknown"

@@ -1,7 +1,7 @@
 #!/bin/bash
-# ContextDuty v0.2.0 Demo Recording Script
-# Run with: asciinema rec demo/contextduty-v0.2.0.cast -c "bash demo/record-demo.sh"
-# Convert to GIF: agg demo/contextduty-v0.2.0.cast demo/contextduty-v0.2.0.gif --theme monokai
+# ContextDuty v0.2.3 Demo Recording Script
+# Run with: asciinema rec demo/contextduty-v0.2.3.cast -c "bash demo/record-demo.sh"
+# Convert to GIF: agg demo/contextduty-v0.2.3.cast demo/contextduty-v0.2.3.gif --theme monokai
 
 set -e
 
@@ -25,7 +25,7 @@ pause() { sleep "${1:-1.5}"; }
 
 clear
 echo ""
-echo -e "${BOLD}  ContextDuty v0.2.0 — The AI Context Firewall${RESET}"
+echo -e "${BOLD}  ContextDuty v0.2.3 — The AI Context Firewall${RESET}"
 echo -e "${DIM}  Stop secrets from reaching any AI tool${RESET}"
 echo ""
 pause 2
@@ -101,7 +101,7 @@ rm -rf "$TMPDIR"
 # Final
 clear
 echo ""
-echo -e "${BOLD}  ContextDuty v0.2.0${RESET}"
+echo -e "${BOLD}  ContextDuty v0.2.3${RESET}"
 echo ""
 echo "  5 enforcement layers:"
 echo "    1. Workspace ignore files (6 AI tools)"

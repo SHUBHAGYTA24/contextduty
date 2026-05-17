@@ -1,3 +1,8 @@
 """ContextDuty — policy-driven context firewall for AI workflows."""
 
-__version__ = "0.2.0"
+try:
+    from importlib.metadata import version, PackageNotFoundError
+
+    __version__ = version("contextduty")
+except PackageNotFoundError:
+    __version__ = "0.2.2"  # fallback for editable installs

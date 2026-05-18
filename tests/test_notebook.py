@@ -4,7 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from contextduty.engine import scan_file, redact_file
+from contextduty.engine import redact_file, scan_file
 from contextduty.policy import Policy
 
 
@@ -28,14 +28,16 @@ def _write_notebook(tmp_dir, name, nb_dict):
 
 
 def test_scan_notebook_detects_aws_key():
-    nb = _make_notebook([
-        {
-            "cell_type": "code",
-            "source": ["import boto3\n", "key = 'AKIAIOSFODNN7EXAMPLE'\n"],
-            "metadata": {},
-            "outputs": [],
-        }
-    ])
+    nb = _make_notebook(
+        [
+            {
+                "cell_type": "code",
+                "source": ["import boto3\n", "key = 'AKIAIOSFODNN7EXAMPLE'\n"],
+                "metadata": {},
+                "outputs": [],
+            }
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         path = _write_notebook(tmp, "secrets.ipynb", nb)
         result = scan_file(path, _policy())
@@ -44,20 +46,22 @@ def test_scan_notebook_detects_aws_key():
 
 
 def test_scan_notebook_detects_secret_in_output():
-    nb = _make_notebook([
-        {
-            "cell_type": "code",
-            "source": ["print(key)\n"],
-            "metadata": {},
-            "outputs": [
-                {
-                    "output_type": "stream",
-                    "name": "stdout",
-                    "text": ["AKIAIOSFODNN7EXAMPLE\n"],
-                }
-            ],
-        }
-    ])
+    nb = _make_notebook(
+        [
+            {
+                "cell_type": "code",
+                "source": ["print(key)\n"],
+                "metadata": {},
+                "outputs": [
+                    {
+                        "output_type": "stream",
+                        "name": "stdout",
+                        "text": ["AKIAIOSFODNN7EXAMPLE\n"],
+                    }
+                ],
+            }
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         path = _write_notebook(tmp, "output_leak.ipynb", nb)
         result = scan_file(path, _policy())
@@ -66,14 +70,16 @@ def test_scan_notebook_detects_secret_in_output():
 
 
 def test_scan_notebook_clean():
-    nb = _make_notebook([
-        {
-            "cell_type": "code",
-            "source": ["x = 42\n"],
-            "metadata": {},
-            "outputs": [],
-        }
-    ])
+    nb = _make_notebook(
+        [
+            {
+                "cell_type": "code",
+                "source": ["x = 42\n"],
+                "metadata": {},
+                "outputs": [],
+            }
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         path = _write_notebook(tmp, "clean.ipynb", nb)
         result = scan_file(path, _policy())
@@ -81,19 +87,21 @@ def test_scan_notebook_clean():
 
 
 def test_redact_notebook_preserves_structure():
-    nb = _make_notebook([
-        {
-            "cell_type": "code",
-            "source": ["key = 'AKIAIOSFODNN7EXAMPLE'\n"],
-            "metadata": {},
-            "outputs": [],
-        },
-        {
-            "cell_type": "markdown",
-            "source": ["# Clean cell\n"],
-            "metadata": {},
-        },
-    ])
+    nb = _make_notebook(
+        [
+            {
+                "cell_type": "code",
+                "source": ["key = 'AKIAIOSFODNN7EXAMPLE'\n"],
+                "metadata": {},
+                "outputs": [],
+            },
+            {
+                "cell_type": "markdown",
+                "source": ["# Clean cell\n"],
+                "metadata": {},
+            },
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         inp = _write_notebook(tmp, "in.ipynb", nb)
         out = Path(tmp) / "out.ipynb"
@@ -110,20 +118,22 @@ def test_redact_notebook_preserves_structure():
 
 
 def test_redact_notebook_output():
-    nb = _make_notebook([
-        {
-            "cell_type": "code",
-            "source": ["print(key)\n"],
-            "metadata": {},
-            "outputs": [
-                {
-                    "output_type": "stream",
-                    "name": "stdout",
-                    "text": ["AKIAIOSFODNN7EXAMPLE\n"],
-                }
-            ],
-        }
-    ])
+    nb = _make_notebook(
+        [
+            {
+                "cell_type": "code",
+                "source": ["print(key)\n"],
+                "metadata": {},
+                "outputs": [
+                    {
+                        "output_type": "stream",
+                        "name": "stdout",
+                        "text": ["AKIAIOSFODNN7EXAMPLE\n"],
+                    }
+                ],
+            }
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         inp = _write_notebook(tmp, "in.ipynb", nb)
         out = Path(tmp) / "out.ipynb"

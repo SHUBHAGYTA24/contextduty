@@ -273,6 +273,8 @@ clean = redact("db = postgres://admin:secret@prod:5432/app")
 
 **Notebook file scanning** — `.ipynb` files are also scanned by `contextduty scan`, `install-hooks`, and `redact`. Cell sources, markdown cells, and cell outputs (including `display_data` and `execute_result`) are all covered.
 
+📓 **[Try the example notebook →](examples/notebook_guard.ipynb)**
+
 ---
 
 ## Detection: 43 built-in detectors

@@ -107,15 +107,54 @@ def _apply_findings(
     return updated
 
 
+def _extract_notebook_sources(path: Path) -> list[str]:
+    """Extract source lines from Jupyter notebook code and markdown cells."""
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            nb = json.load(f)
+        lines: list[str] = []
+        for cell in nb.get("cells", []):
+            source = cell.get("source", [])
+            if isinstance(source, list):
+                lines.extend(source)
+            elif isinstance(source, str):
+                lines.extend(source.splitlines(keepends=True))
+            # Also scan cell outputs for leaked secrets
+            for output in cell.get("outputs", []):
+                text = output.get("text", [])
+                if isinstance(text, list):
+                    lines.extend(text)
+                elif isinstance(text, str):
+                    lines.extend(text.splitlines(keepends=True))
+                data = output.get("data", {})
+                for mime_lines in data.values():
+                    if isinstance(mime_lines, list):
+                        lines.extend(mime_lines)
+                    elif isinstance(mime_lines, str):
+                        lines.extend(mime_lines.splitlines(keepends=True))
+        return lines
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+
 def scan_file(path: Path, policy: Policy) -> ScanResult:
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
     blocked_detectors: set[str] = set()
 
-    with path.open("r", encoding="utf-8", errors="replace") as handle:
-        for line in handle:
+    if path.suffix.lower() == ".ipynb":
+        lines = _extract_notebook_sources(path)
+        if not lines:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                lines = handle.readlines()
+        for line in lines:
             findings = _scan_line(line, detectors)
             _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
+    else:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                findings = _scan_line(line, detectors)
+                _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
 
     findings_count = sum(detector_counts.values())
     blocked = len(blocked_detectors) > 0
@@ -167,7 +206,92 @@ def scan_dir(root: Path, policy: Policy, recursive: bool = True) -> ScanResult:
     )
 
 
+def _redact_notebook(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
+    """Redact secrets in a Jupyter notebook, preserving the .ipynb JSON structure."""
+    detectors = _active_detectors(policy)
+    detector_counts: dict[str, int] = {}
+    blocked_detectors: set[str] = set()
+
+    with input_path.open("r", encoding="utf-8", errors="replace") as f:
+        nb = json.load(f)
+
+    for cell in nb.get("cells", []):
+        source = cell.get("source", [])
+        if isinstance(source, list):
+            cell["source"] = [
+                _apply_findings(
+                    line,
+                    _scan_line(line, detectors),
+                    policy,
+                    detector_counts,
+                    blocked_detectors,
+                    redact_blocked=True,
+                )
+                for line in source
+            ]
+        elif isinstance(source, str):
+            lines = source.splitlines(keepends=True)
+            cell["source"] = "".join(
+                _apply_findings(
+                    line,
+                    _scan_line(line, detectors),
+                    policy,
+                    detector_counts,
+                    blocked_detectors,
+                    redact_blocked=True,
+                )
+                for line in lines
+            )
+        for output in cell.get("outputs", []):
+            text = output.get("text", [])
+            if isinstance(text, list):
+                output["text"] = [
+                    _apply_findings(
+                        line,
+                        _scan_line(line, detectors),
+                        policy,
+                        detector_counts,
+                        blocked_detectors,
+                        redact_blocked=True,
+                    )
+                    for line in text
+                ]
+            data = output.get("data", {})
+            for mime_type, mime_lines in data.items():
+                if isinstance(mime_lines, list):
+                    data[mime_type] = [
+                        _apply_findings(
+                            line,
+                            _scan_line(line, detectors),
+                            policy,
+                            detector_counts,
+                            blocked_detectors,
+                            redact_blocked=True,
+                        )
+                        for line in mime_lines
+                    ]
+
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(nb, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+    findings_count = sum(detector_counts.values())
+    blocked = len(blocked_detectors) > 0
+    return ScanResult(
+        findings_count=findings_count,
+        detector_counts=detector_counts,
+        blocked=blocked,
+        blocked_by=sorted(blocked_detectors),
+    )
+
+
 def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
+    if input_path.suffix.lower() == ".ipynb":
+        try:
+            return _redact_notebook(input_path, output_path, policy)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass  # Fallback to plain text redaction
+
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
     blocked_detectors: set[str] = set()

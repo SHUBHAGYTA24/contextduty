@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![258 Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen.svg)](#)
+[![273 Tests](https://img.shields.io/badge/tests-273%20passing-brightgreen.svg)](#)
 
 ---
 
@@ -243,18 +243,53 @@ With `"mode": "block"`, the pipeline exits non-zero. PR cannot merge.
 
 ---
 
-## Detection: 25 built-in detectors
+## Jupyter / Colab / Databricks — notebook API
+
+Data scientists who live in notebooks and don't use git still need protection. One import, zero config:
+
+```python
+# Cell 1
+from contextduty.notebook import guard, redact
+
+# Cell 2 — scan any text before sending to an API
+guard("""
+    aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+    db_url = postgres://admin:password123@prod-db:5432/users
+""")
+# ⚠️ ContextDuty: 2 secret(s) found!
+#   • aws_secret: 1 occurrence(s)
+#   • postgres_dsn: 1 occurrence(s)
+
+# Cell 3 — get a clean version
+clean = redact("db = postgres://admin:secret@prod:5432/app")
+# → "db = <POSTGRES_DSN_a1b2c3d4>"
+```
+
+| Function | What it does |
+|---|---|
+| `guard(text)` | Scan + print a visible warning (rich HTML in Jupyter, plain text in terminal) |
+| `redact(text)` | Return text with all secrets replaced by deterministic masks |
+| `scan(text)` | Return structured `ScanTextResult` for programmatic use |
+
+**Notebook file scanning** — `.ipynb` files are also scanned by `contextduty scan`, `install-hooks`, and `redact`. Cell sources, markdown cells, and cell outputs (including `display_data` and `execute_result`) are all covered.
+
+---
+
+## Detection: 43 built-in detectors
 
 | Category | Detectors |
 |---|---|
-| **PII** | `email`, `phone` |
-| **Generic tokens** | `api_key`, `bearer_token`, `env_secret` |
-| **Cloud** | `aws_key`, `aws_secret`, `gcp_service_account`, `azure_storage_key`, `google_oauth_token` |
-| **VCS** | `github_pat` |
-| **AI/ML** | `openai_key`, `anthropic_key`, `huggingface_token` |
-| **SaaS** | `slack_token`, `stripe_webhook`, `sendgrid_key`, `mailchimp_key`, `npm_token`, `twilio_sid` |
-| **Databases** | `db_dsn` (postgres, mysql, mongodb, redis — only when credentials present) |
-| **Crypto** | `ssh_private_key`, `pgp_private_key`, `private_key_pem`, `jwt` |
+| **Cloud / Infra** | `aws_key`, `aws_secret`, `aws_mfa_serial`, `gcp_service_account`, `gcp_api_key`, `azure_client_secret`, `azure_storage_key` |
+| **VCS / CI** | `github_pat`, `github_oauth`, `github_app_token`, `github_refresh_token`, `gitlab_pat`, `gitlab_runner_token` |
+| **Payment** | `stripe_secret`, `stripe_restricted`, `stripe_publishable`, `stripe_webhook`, `paypal_secret`, `credit_card` |
+| **Messaging** | `slack_bot_token`, `slack_user_token`, `slack_workspace_token`, `slack_config_token`, `twilio_account_sid`, `twilio_auth_token`, `sendgrid_key`, `mailgun_key` |
+| **AI / ML** | `openai_key`, `anthropic_key`, `huggingface_token`, `cohere_key`, `replicate_key` |
+| **Databases** | `postgres_dsn`, `mysql_dsn`, `mongodb_dsn`, `redis_dsn`, `elasticsearch_dsn`, `sqlserver_dsn` |
+| **Generic secrets** | `api_key`, `generic_secret`, `private_key_block`, `certificate_block`, `pgp_private`, `bearer_token`, `jwt_token`, `basic_auth_url`, `env_secret` |
+| **IaC** | `terraform_state_secret`, `docker_auth`, `k8s_secret_data` |
+| **PII** | `email`, `phone`, `ssn`, `passport` |
+| **Healthcare** | `npi_number`, `dea_number`, `icd10_code` |
+| **Crypto / Web3** | `ethereum_private_key`, `bitcoin_private_key_wif`, `mnemonic_phrase` |
 
 **Deterministic masks:** `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5d44a2dc>` — same value, same mask, everywhere. Audit logs stay correlatable without storing raw secrets.
 
@@ -344,12 +379,13 @@ Local web UI with dark theme: findings by detector, 30-day timeline, blocked com
 ```
 src/contextduty/
 ├── config.py              # Centralized paths, env vars, constants
-├── engine.py              # Core scan/redact engine (25 detectors)
+├── engine.py              # Core scan/redact engine (43 detectors, .ipynb support)
 ├── detectors.py           # Regex detector definitions
 ├── policy.py              # Policy loading, validation, inheritance
 ├── cli.py                 # CLI entry point (18 commands)
 ├── protect.py             # Universal workspace protection
 ├── cursor.py              # Cursor-specific shortcut
+├── notebook.py            # Jupyter/Colab/Databricks API (guard, redact, scan)
 ├── demo.py                # Interactive demo
 ├── dashboard.py           # Local audit web UI
 ├── core/
@@ -392,14 +428,14 @@ src/contextduty/
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
 pip install -e ".[dev]"
-make check    # format + lint + 258 tests
+make check    # format + lint + 273 tests
 ```
 
 ---
 
 ## Roadmap
 
-- [x] 25 built-in detectors
+- [x] 43 built-in detectors
 - [x] Pre-commit hook (`contextduty install-hooks`)
 - [x] MCP server (Cursor, Claude, VS Code)
 - [x] Directory scanning (`contextduty scan src/`)
@@ -412,8 +448,10 @@ make check    # format + lint + 258 tests
 - [x] Declarative field walker (new AI provider = add paths, zero code)
 - [x] Enterprise architecture (config, exceptions, UI, adapters)
 - [x] Published on PyPI (`pip install contextduty`)
+- [x] Jupyter / Colab / Databricks notebook API (`guard`, `redact`, `scan`)
+- [x] `.ipynb` file scanning (cells, outputs, display_data)
+- [ ] NLP-based PII detection (Presidio integration)
 - [ ] VS Code / Cursor extension
-- [ ] Presidio integration for NLP-based PII detection
 - [ ] Prometheus metrics endpoint
 
 ---

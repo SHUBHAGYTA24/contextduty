@@ -77,3 +77,4 @@ select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 "src/contextduty/proxy/feed.py" = ["E501"]
 "tests/test_cursor.py" = ["E501"]
 "tests/test_protect.py" = ["E501"]
+"examples/nlp-demo/*" = ["E501", "F401", "F541", "I001"]

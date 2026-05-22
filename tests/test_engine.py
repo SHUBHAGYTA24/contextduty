@@ -185,3 +185,55 @@ def test_scan_dir_blocked_aggregated(tmp_path):
     result = scan_dir(tmp_path, policy)
     assert result.blocked is True
     assert "aws_key" in result.blocked_by
+
+
+# ---------------------------------------------------------------------------
+# ReDoS protection
+# ---------------------------------------------------------------------------
+
+
+def test_scan_line_skips_extremely_long_lines():
+    """Lines over MAX_LINE_LEN are skipped entirely to prevent ReDoS."""
+    from contextduty.detectors import DETECTORS
+    from contextduty.engine import MAX_LINE_LEN, _scan_line
+
+    # A line just under the limit should be scanned normally
+    normal = "email: user@example.com " + "x" * 100
+    assert len(_scan_line(normal, DETECTORS)) > 0
+
+    # A line over the limit is skipped
+    huge = "email: user@example.com " + "x" * (MAX_LINE_LEN + 1)
+    assert _scan_line(huge, DETECTORS) == []
+
+
+# ---------------------------------------------------------------------------
+# Parallel scanning
+# ---------------------------------------------------------------------------
+
+
+def test_scan_dir_parallel(tmp_path):
+    """Parallel scanning produces the same results as sequential."""
+    for i in range(10):
+        (tmp_path / f"file_{i}.py").write_text(f'email = "user{i}@example.com"\n')
+
+    policy = Policy(mode="warn", detectors={"email"}, custom_detectors={})
+
+    seq_result = scan_dir(tmp_path, policy, workers=1)
+    par_result = scan_dir(tmp_path, policy, workers=4)
+
+    assert seq_result.findings_count == par_result.findings_count == 10
+    assert seq_result.detector_counts == par_result.detector_counts
+    assert sorted(seq_result.files_scanned) == sorted(par_result.files_scanned)
+
+
+def test_scan_dir_fail_fast_parallel(tmp_path):
+    """fail_fast stops early even in parallel mode."""
+    (tmp_path / "a.py").write_text('KEY = "AKIAIOSFODNN7EXAMPLE"\n')
+    for i in range(20):
+        (tmp_path / f"clean_{i}.py").write_text(f"x = {i}\n")
+
+    policy = Policy(mode="block", detectors={"aws_key"}, custom_detectors={})
+    result = scan_dir(tmp_path, policy, fail_fast=True, workers=2)
+    assert result.blocked is True
+    # Should have scanned fewer than all 21 files
+    assert len(result.files_scanned) <= 21

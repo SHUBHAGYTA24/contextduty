@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -14,6 +16,14 @@ from .policy import Policy
 
 # Backward-compat alias — old imports still work
 _BINARY_EXTENSIONS = BINARY_EXTENSIONS
+
+# ---------------------------------------------------------------------------
+# ReDoS protection — skip lines that are too long for safe regex scanning.
+# Lines over this limit are returned as-is (no scanning). This prevents
+# catastrophic backtracking from untrusted or malformed input.
+# Override with CONTEXTDUTY_MAX_LINE_LEN env var.
+# ---------------------------------------------------------------------------
+MAX_LINE_LEN: int = int(os.environ.get("CONTEXTDUTY_MAX_LINE_LEN", "50000"))
 
 # Cache for compiled custom detector patterns — avoids re-compiling on every scan.
 _custom_pattern_cache: dict[str, re.Pattern[str]] = {}
@@ -65,6 +75,10 @@ def _active_detectors(policy: Policy) -> list[Detector]:
 
 
 def _scan_line(line: str, detectors: Iterable[Detector]) -> list[Finding]:
+    # ReDoS guard: skip lines that are unreasonably long.
+    if len(line) > MAX_LINE_LEN:
+        return []
+
     findings: list[Finding] = []
     for detector in detectors:
         for match in detector.pattern.finditer(line):
@@ -209,43 +223,27 @@ def scan_file(path: Path, policy: Policy) -> ScanResult:
     )
 
 
-def scan_dir(
-    root: Path,
-    policy: Policy,
-    recursive: bool = True,
-    *,
+def _scan_file_worker(args: tuple[str, Policy]) -> tuple[str, ScanResult] | None:
+    """Worker function for parallel scanning — must be top-level for pickling."""
+    path_str, policy = args
+    try:
+        result = scan_file(Path(path_str), policy)
+        return (path_str, result)
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _merge_results(
+    results: Iterable[tuple[str, ScanResult]],
     fail_fast: bool = False,
 ) -> ScanResult:
-    """Scan every text file under *root* and return a combined ScanResult.
-
-    Skips binary files (by extension) and files that cannot be decoded as UTF-8.
-    If *root* is a file, delegates to scan_file().
-
-    Args:
-        fail_fast: When True, stop scanning after the first file that triggers
-            a block.  Useful for large repos in CI where you only care whether
-            the build should fail.
-    """
-    if root.is_file():
-        return scan_file(root, policy)
-
-    if not root.is_dir():
-        raise ValueError(f"{root} is not a file or directory")
-
-    glob = root.rglob("*") if recursive else root.glob("*")
-
+    """Merge per-file ScanResults into a single combined result."""
     combined_counts: dict[str, int] = {}
     combined_blocked: set[str] = set()
     files_scanned: list[str] = []
 
-    for path in sorted(p for p in glob if p.is_file()):
-        if path.suffix.lower() in _BINARY_EXTENSIONS:
-            continue
-        try:
-            result = scan_file(path, policy)
-        except (OSError, UnicodeDecodeError):
-            continue
-        files_scanned.append(str(path))
+    for path_str, result in results:
+        files_scanned.append(path_str)
         for det, count in result.detector_counts.items():
             combined_counts[det] = combined_counts.get(det, 0) + count
         combined_blocked.update(result.blocked_by)
@@ -260,6 +258,76 @@ def scan_dir(
         blocked_by=sorted(combined_blocked),
         files_scanned=files_scanned,
     )
+
+
+# Default parallelism: use half the CPU cores (I/O-bound work, not CPU-bound).
+# Override with CONTEXTDUTY_WORKERS env var. Set to 1 to disable parallelism.
+_DEFAULT_WORKERS = max(1, (os.cpu_count() or 2) // 2)
+
+
+def scan_dir(
+    root: Path,
+    policy: Policy,
+    recursive: bool = True,
+    *,
+    fail_fast: bool = False,
+    workers: int | None = None,
+) -> ScanResult:
+    """Scan every text file under *root* and return a combined ScanResult.
+
+    Skips binary files (by extension) and files that cannot be decoded as UTF-8.
+    If *root* is a file, delegates to scan_file().
+
+    Args:
+        fail_fast: When True, stop scanning after the first file that triggers
+            a block.  Useful for large repos in CI where you only care whether
+            the build should fail.
+        workers: Number of parallel worker processes.  Defaults to half the CPU
+            cores.  Set to ``1`` to disable parallelism (useful for debugging).
+            Override globally with ``CONTEXTDUTY_WORKERS`` env var.
+    """
+    if root.is_file():
+        return scan_file(root, policy)
+
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a file or directory")
+
+    glob = root.rglob("*") if recursive else root.glob("*")
+    paths = [p for p in sorted(glob) if p.is_file() and p.suffix.lower() not in _BINARY_EXTENSIONS]
+
+    if not paths:
+        return ScanResult(findings_count=0, detector_counts={}, blocked=False, blocked_by=[])
+
+    n_workers = workers or int(os.environ.get("CONTEXTDUTY_WORKERS", str(_DEFAULT_WORKERS)))
+
+    # For small file counts or single worker, skip multiprocessing overhead.
+    if n_workers <= 1 or len(paths) < 4:
+        results = []
+        for path in paths:
+            pair = _scan_file_worker((str(path), policy))
+            if pair is not None:
+                results.append(pair)
+        return _merge_results(results, fail_fast=fail_fast)
+
+    # Parallel scanning with ProcessPoolExecutor.
+    results: list[tuple[str, ScanResult]] = []
+    work_items = [(str(p), policy) for p in paths]
+
+    with ProcessPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_scan_file_worker, item): item for item in work_items}
+        for future in as_completed(futures):
+            pair = future.result()
+            if pair is not None:
+                results.append(pair)
+                if fail_fast and pair[1].blocked_by:
+                    # Cancel remaining futures.
+                    for f in futures:
+                        f.cancel()
+                    break
+
+    # Sort by path for deterministic output.
+    results.sort(key=lambda r: r[0])
+    return _merge_results(results, fail_fast=fail_fast)
 
 
 def _redact_notebook(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:

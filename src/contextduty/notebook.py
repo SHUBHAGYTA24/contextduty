@@ -183,8 +183,8 @@ def _print_html_warning(result: ScanResult, nlp_result=None) -> None:
         nlp_items = ""
         for f in nlp_result.findings:
             nlp_items += (
-                f'<li><code>{f.detector_name}</code>: '
-                f'<b>{f.entity_text}</b> '
+                f"<li><code>{f.detector_name}</code>: "
+                f"<b>{f.entity_text}</b> "
                 f'<span style="color:#888;">[confidence: {f.confidence:.2f}]</span>'
                 f"</li>"
             )

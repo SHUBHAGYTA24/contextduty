@@ -101,9 +101,7 @@ class TestScanTextNLP:
         assert person_findings[0].confidence >= 0.7
 
     def test_sql_context_boosts_confidence(self):
-        code = (
-            """query = "SELECT * FROM users WHERE name = 'Maria Garcia'" """
-        )
+        code = """query = "SELECT * FROM users WHERE name = 'Maria Garcia'" """
         result = scan_text_nlp(code, min_confidence=0.3)
         person_findings = [f for f in result.findings if f.entity_label == "PERSON"]
         assert len(person_findings) > 0
@@ -135,7 +133,7 @@ class TestScanTextNLP:
 class TestScanFileNLP:
     def test_scan_python_file(self):
         with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
-            f.write('# Process data for customer John Smith\n')
+            f.write("# Process data for customer John Smith\n")
             f.write('name = "John Smith"\n')
             f.write('email = "john@example.com"\n')
             f.flush()

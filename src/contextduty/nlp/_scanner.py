@@ -39,9 +39,7 @@ def scan_text_nlp(
     nlp = get_model(model_name)
     result = NLPScanResult()
 
-    segments = (
-        extract_text_segments(text) if extract_segments else [(text, "raw")]
-    )
+    segments = extract_text_segments(text) if extract_segments else [(text, "raw")]
     if not segments:
         return result
 

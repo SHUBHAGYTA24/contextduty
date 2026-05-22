@@ -15,27 +15,27 @@ import re
 # ---------------------------------------------------------------------------
 
 _STRING_LITERAL = re.compile(
-    r'(?:'
-    r'"""[\s\S]*?"""|'        # triple-double-quoted
-    r"'''[\s\S]*?'''|"        # triple-single-quoted
-    r'f"""[\s\S]*?"""|'       # f-string triple-double
-    r"f'''[\s\S]*?'''|"       # f-string triple-single
-    r'"(?:[^"\\]|\\.)*"|'     # double-quoted
-    r"'(?:[^'\\]|\\.)*'"      # single-quoted
-    r')'
+    r"(?:"
+    r'"""[\s\S]*?"""|'  # triple-double-quoted
+    r"'''[\s\S]*?'''|"  # triple-single-quoted
+    r'f"""[\s\S]*?"""|'  # f-string triple-double
+    r"f'''[\s\S]*?'''|"  # f-string triple-single
+    r'"(?:[^"\\]|\\.)*"|'  # double-quoted
+    r"'(?:[^'\\]|\\.)*'"  # single-quoted
+    r")"
 )
 
 _COMMENT_LINE = re.compile(
-    r'(?:'
-    r'#\s*(.*?)$|'            # Python / Ruby / Shell
-    r'//\s*(.*?)$|'           # JS / Java / Go / Rust
-    r'/\*\s*([\s\S]*?)\s*\*/' # Block comments
-    r')',
+    r"(?:"
+    r"#\s*(.*?)$|"  # Python / Ruby / Shell
+    r"//\s*(.*?)$|"  # JS / Java / Go / Rust
+    r"/\*\s*([\s\S]*?)\s*\*/"  # Block comments
+    r")",
     re.MULTILINE,
 )
 
 # Minimum "looks like words" filter — avoids feeding symbols to the model.
-_HAS_WORDS = re.compile(r'[a-zA-Z]{2,}')
+_HAS_WORDS = re.compile(r"[a-zA-Z]{2,}")
 
 
 # ---------------------------------------------------------------------------

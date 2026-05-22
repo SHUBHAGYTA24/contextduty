@@ -37,6 +37,17 @@ def _parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("--policy", default=".contextduty.json", help="Policy path.")
     scan_parser.add_argument("--report", help="Optional report output JSON path.")
     scan_parser.add_argument("--audit-log", dest="audit_log", help=_AUDIT_LOG_HELP)
+    scan_parser.add_argument(
+        "--nlp",
+        action="store_true",
+        help="Enable NLP-based PII detection (requires: pip install contextduty[nlp]).",
+    )
+    scan_parser.add_argument(
+        "--nlp-confidence",
+        type=float,
+        default=0.5,
+        help="Minimum confidence threshold for NLP findings (0.0-1.0, default: 0.5).",
+    )
 
     # ── redact ────────────────────────────────────────────────────────────────
     redact_parser = subparsers.add_parser("redact", help="Redact risky data from an input file.")
@@ -243,6 +254,32 @@ def main() -> None:  # noqa: C901
         result = scan_dir(target, policy) if target.is_dir() else scan_file(target, policy)
         report = report_to_json(result)
         print(report)
+        # NLP scan (optional)
+        if getattr(args, "nlp", False):
+            try:
+                from .nlp import scan_file_nlp
+
+                nlp_result = scan_file_nlp(
+                    str(target), min_confidence=getattr(args, "nlp_confidence", 0.5)
+                )
+                if nlp_result.findings:
+                    print("\n🧠 NLP-detected PII:")
+                    for f in nlp_result.findings:
+                        print(
+                            f"  • {f.detector_name}: {f.entity_text} "
+                            f"[confidence: {f.confidence:.2f}]"
+                        )
+                    print(
+                        f"\n  {len(nlp_result.findings)} NLP finding(s), "
+                        f"{nlp_result.entities_suppressed} suppressed by context scoring"
+                    )
+                else:
+                    print("\n🧠 NLP: no PII detected")
+            except ImportError:
+                print(
+                    "\n⚠️  NLP not available. Install with: pip install contextduty[nlp]",
+                    file=sys.stderr,
+                )
         if args.report:
             Path(args.report).write_text(report + "\n", encoding="utf-8")
         if args.audit_log:

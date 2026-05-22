@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![273 Tests](https://img.shields.io/badge/tests-273%20passing-brightgreen.svg)](#)
+[![296 Tests](https://img.shields.io/badge/tests-296%20passing-brightgreen.svg)](#)
 
 ---
 
@@ -308,6 +308,52 @@ clean = redact("db = postgres://admin:secret@prod:5432/app")
 
 ---
 
+## NLP-based PII detection (Layer 2)
+
+Beyond regex, ContextDuty runs **spaCy NER** to catch unstructured PII — person names, organizations, locations, dates, and financial entities hiding in strings, comments, docstrings, and notebook cells.
+
+```bash
+pip install contextduty[nlp]
+python -m spacy download en_core_web_sm
+
+# Scan with NLP enabled
+contextduty scan --nlp src/
+contextduty scan --nlp --nlp-confidence 0.7 src/
+```
+
+**How it works:**
+
+1. **Extract** — pulls natural-language segments from code (strings, comments, docstrings, notebook cells/outputs)
+2. **Detect** — runs spaCy NER (`en_core_web_sm`, 12MB CNN, 10K+ tok/s on CPU)
+3. **Score** — context-aware confidence adjustment:
+   - 📈 **Boosts** near PII keywords (`patient`, `SSN`, `SELECT FROM`, `diagnosis`, `account`)
+   - 📉 **Suppresses** in code contexts (`import`, `def`, `localhost`, `example.com`, `TODO`)
+4. **Return** — findings with confidence scores, compatible with the existing scan pipeline
+
+**In notebooks:**
+
+```python
+from contextduty.notebook import guard
+
+guard("""
+    Patient: John Smith, DOB: 1990-01-15
+    aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+""")
+# ⚠️  ContextDuty: 2 finding(s) detected!
+#   • aws_secret: 1 occurrence(s)
+#   🧠 NLP-detected PII:
+#   • nlp_person: John Smith [confidence: 0.95]
+```
+
+**Enterprise fine-tuning** — train a custom model on your domain data, deploy on CPU:
+
+```python
+from contextduty.nlp import load_model
+load_model("/path/to/bank-custom-ner-model")
+```
+
+---
+
 ## Policy system
 
 ```bash
@@ -388,6 +434,12 @@ src/contextduty/
 ├── protect.py             # Universal workspace protection
 ├── cursor.py              # Cursor-specific shortcut
 ├── notebook.py            # Jupyter/Colab/Databricks API (guard, redact, scan)
+├── nlp/                   # NLP-based PII detection (optional, requires spaCy)
+│   ├── _model.py          #   spaCy model loading and lifecycle
+│   ├── _extract.py        #   text segment extraction from code/notebooks
+│   ├── _scoring.py        #   context-aware confidence scoring
+│   ├── _scanner.py        #   core NER scanning orchestration
+│   └── _types.py          #   NLPFinding and NLPScanResult dataclasses
 ├── demo.py                # Interactive demo
 ├── dashboard.py           # Local audit web UI
 ├── core/
@@ -415,6 +467,7 @@ src/contextduty/
 |---|---|---|---|
 | Blocks AI indexing (Cursor, Copilot, etc.) | ✅ 6 tools | ❌ | ❌ |
 | Pre-commit secret scanning | ✅ | ❌ | ❌ |
+| NLP-based PII detection (names, orgs, dates) | ✅ spaCy NER | ❌ | ❌ |
 | HTTPS proxy (intercepts any AI API) | ✅ 21 endpoints | ✅ (different purpose) | ❌ |
 | MCP tool-call interception | ✅ | ❌ | ❌ |
 | Runs 100% locally | ✅ | ❌ | ✅ |
@@ -430,7 +483,7 @@ src/contextduty/
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
 pip install -e ".[dev]"
-make check    # format + lint + 273 tests
+make check    # format + lint + 296 tests
 ```
 
 ---
@@ -452,7 +505,7 @@ make check    # format + lint + 273 tests
 - [x] Published on PyPI (`pip install contextduty`)
 - [x] Jupyter / Colab / Databricks notebook API (`guard`, `redact`, `scan`)
 - [x] `.ipynb` file scanning (cells, outputs, display_data)
-- [ ] NLP-based PII detection (Presidio integration)
+- [x] NLP-based PII detection (spaCy NER with context-aware scoring)
 - [ ] VS Code / Cursor extension
 - [ ] Prometheus metrics endpoint
 

@@ -15,11 +15,16 @@ from .policy import Policy
 # Backward-compat alias — old imports still work
 _BINARY_EXTENSIONS = BINARY_EXTENSIONS
 
+# Cache for compiled custom detector patterns — avoids re-compiling on every scan.
+_custom_pattern_cache: dict[str, re.Pattern[str]] = {}
+
 
 @dataclass(frozen=True)
 class Finding:
     detector: str
     value: str
+    start: int = 0  # character offset within the line
+    end: int = 0
 
 
 @dataclass(frozen=True)
@@ -50,9 +55,12 @@ def _is_allowed(value: str, detector_name: str, policy: Policy) -> bool:
 
 def _active_detectors(policy: Policy) -> list[Detector]:
     active = [detector for detector in DETECTORS if detector.name in policy.detectors]
-    for name, pattern in policy.custom_detectors.items():
+    for name, pattern_str in policy.custom_detectors.items():
         if name in policy.detectors:
-            active.append(Detector(name=name, pattern=re.compile(pattern)))
+            # Cache compiled patterns — same pattern string reuses the compiled object.
+            if pattern_str not in _custom_pattern_cache:
+                _custom_pattern_cache[pattern_str] = re.compile(pattern_str)
+            active.append(Detector(name=name, pattern=_custom_pattern_cache[pattern_str]))
     return active
 
 
@@ -60,7 +68,14 @@ def _scan_line(line: str, detectors: Iterable[Detector]) -> list[Finding]:
     findings: list[Finding] = []
     for detector in detectors:
         for match in detector.pattern.finditer(line):
-            findings.append(Finding(detector=detector.name, value=match.group(0)))
+            findings.append(
+                Finding(
+                    detector=detector.name,
+                    value=match.group(0),
+                    start=match.start(),
+                    end=match.end(),
+                )
+            )
     return findings
 
 
@@ -74,37 +89,65 @@ def _apply_findings(
 ) -> str:
     """Apply per-detector mode logic to a text segment. Returns the (possibly redacted) text.
 
-    Findings are processed longest-value-first so that specific long patterns (e.g. a full
-    Slack bot token) take precedence over short patterns (e.g. the phone detector matching
-    the numeric segments inside the same token).
+    Uses offset-based single-pass replacement: sort findings by start position,
+    skip overlapping ranges already claimed by a longer match, and build the
+    output string in one pass.  This avoids O(n²) ``str.replace()`` chains on
+    lines with many findings.
 
     Args:
         redact_blocked: When True (used by redact_file), block-mode detectors also have their
             values masked in the output. When False (used by scan), block-mode values are left
             in place and only flagged.
     """
-    updated = text
-    already_masked: set[str] = set()
+    if not findings:
+        return text
+
+    # First pass: decide what to mask (longest match wins for overlaps).
+    # Sort longest-first so a long match takes priority over shorter overlapping ones.
+    replacements: list[tuple[int, int, str]] = []  # (start, end, mask)
+    claimed: set[str] = set()  # deduplicate identical values
+
     for finding in sorted(findings, key=lambda f: len(f.value), reverse=True):
         if _is_allowed(finding.value, finding.detector, policy):
             continue
-        # Skip if a longer pattern already replaced this exact value
-        if finding.value in already_masked or finding.value not in updated:
+        if finding.value in claimed:
+            # Still count it, but don't add another replacement.
+            detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
+            mode = _effective_mode(policy, finding.detector)
+            if mode == "block":
+                blocked_detectors.add(finding.detector)
             continue
+
         detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
         mode = _effective_mode(policy, finding.detector)
+
         if mode == "block":
             blocked_detectors.add(finding.detector)
             if redact_blocked:
                 mask = stable_mask(finding.detector, finding.value)
-                updated = updated.replace(finding.value, mask)
-                already_masked.add(finding.value)
+                replacements.append((finding.start, finding.end, mask))
+                claimed.add(finding.value)
         elif mode == "redact":
             mask = stable_mask(finding.detector, finding.value)
-            updated = updated.replace(finding.value, mask)
-            already_masked.add(finding.value)
+            replacements.append((finding.start, finding.end, mask))
+            claimed.add(finding.value)
         # mode == "warn": count it, don't mask, don't block
-    return updated
+
+    if not replacements:
+        return text
+
+    # Second pass: build output in one sweep (sort by start offset).
+    replacements.sort(key=lambda r: r[0])
+    parts: list[str] = []
+    cursor = 0
+    for start, end, mask in replacements:
+        if start < cursor:
+            continue  # skip if overlapping with a prior replacement
+        parts.append(text[cursor:start])
+        parts.append(mask)
+        cursor = end
+    parts.append(text[cursor:])
+    return "".join(parts)
 
 
 def _extract_notebook_sources(path: Path) -> list[str]:
@@ -166,11 +209,22 @@ def scan_file(path: Path, policy: Policy) -> ScanResult:
     )
 
 
-def scan_dir(root: Path, policy: Policy, recursive: bool = True) -> ScanResult:
+def scan_dir(
+    root: Path,
+    policy: Policy,
+    recursive: bool = True,
+    *,
+    fail_fast: bool = False,
+) -> ScanResult:
     """Scan every text file under *root* and return a combined ScanResult.
 
     Skips binary files (by extension) and files that cannot be decoded as UTF-8.
     If *root* is a file, delegates to scan_file().
+
+    Args:
+        fail_fast: When True, stop scanning after the first file that triggers
+            a block.  Useful for large repos in CI where you only care whether
+            the build should fail.
     """
     if root.is_file():
         return scan_file(root, policy)
@@ -179,13 +233,12 @@ def scan_dir(root: Path, policy: Policy, recursive: bool = True) -> ScanResult:
         raise ValueError(f"{root} is not a file or directory")
 
     glob = root.rglob("*") if recursive else root.glob("*")
-    all_paths = sorted(p for p in glob if p.is_file())
 
     combined_counts: dict[str, int] = {}
     combined_blocked: set[str] = set()
     files_scanned: list[str] = []
 
-    for path in all_paths:
+    for path in sorted(p for p in glob if p.is_file()):
         if path.suffix.lower() in _BINARY_EXTENSIONS:
             continue
         try:
@@ -196,6 +249,9 @@ def scan_dir(root: Path, policy: Policy, recursive: bool = True) -> ScanResult:
         for det, count in result.detector_counts.items():
             combined_counts[det] = combined_counts.get(det, 0) + count
         combined_blocked.update(result.blocked_by)
+
+        if fail_fast and combined_blocked:
+            break
 
     return ScanResult(
         findings_count=sum(combined_counts.values()),

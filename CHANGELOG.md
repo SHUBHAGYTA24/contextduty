@@ -7,6 +7,31 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.0] — 2026-05-23
+
+### Added
+- **Audit dashboard v2** — complete UI overhaul: light/dark theme toggle with localStorage persistence, sticky activity table header, detection method breakdown (Regex vs NLP with coverage %), top hotspot files bar chart, client-side filter bar (search + All/Blocked/Warnings/Clean status chips), auto-refresh every 30 s, JSON API + CSV export
+- **NLP-based PII detection** (`pip install contextduty[nlp]`) — spaCy NER catches person names, organisations, locations, dates, and financial entities that regex cannot; context-aware confidence scoring suppresses false positives in code contexts
+- **NLP demo** — three real-world healthcare/finance/notebook scenarios showing 10× detection improvement; `contextduty scan --nlp src/`
+- **`.ipynb` file scanning** — cell sources, markdown cells, outputs, `display_data`, and `execute_result` blocks all covered
+- **35 new detectors** (total: 60) — full coverage across Cloud/Infra, VCS/CI, Payment, Messaging, AI/ML, Databases, IaC, PII, Healthcare, and Crypto/Web3
+- **Jupyter / Colab / Databricks notebook API** — `guard()`, `redact()`, `scan()` with rich HTML warnings in Jupyter and plain-text fallback in terminals
+
+### Changed
+- Dashboard dark theme is now the default; light theme available via toggle (preference persisted in `localStorage`)
+- Activity table header is now sticky within the scroll container — stays visible while scrolling through 50+ entries
+- `_aggregate()` now returns `detection_methods` (regex/nlp split) and `target_totals` (top 10 files by finding count)
+- Test count: 258 → 305
+
+### Stats
+- 305 tests
+- 60 built-in detectors
+- 21 AI API endpoints intercepted
+- 6 AI tool ignore files
+- 18 CLI commands
+
+---
+
 ## [0.2.0] — 2026-05-16
 
 ### Added

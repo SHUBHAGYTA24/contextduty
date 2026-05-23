@@ -279,9 +279,30 @@ Be transparent with your security team about these:
 - **No directory scanning yet** — scan individual files, not `src/` directories. Roadmap.
 - **No GUI dashboard** — audit reporting is CLI + JSON. SIEM integration is the recommended path.
 - **Phone detection is North American only** — international formats not yet supported.
-- **Free-text PII (names, locations)** — regex-based detection cannot catch these. Complement with Presidio if required.
+- **Free-text PII (names, locations)** — regex-based detection cannot catch these without NLP enabled. Install `contextduty[nlp]` and use `--nlp` flag, or complement with Presidio if required.
 - **Typed input is not intercepted** — ContextDuty intercepts file context injected by MCP clients, not text typed directly into chat.
 - **Single maintainer** — see SUPPORT.md for current support model.
+
+---
+
+## NLP Deployment (Enterprise)
+
+For teams handling healthcare records, financial documents, or free-text data, enable NLP-based PII detection across your fleet:
+
+```bash
+pip install 'contextduty[nlp]'
+python -m spacy download en_core_web_sm
+```
+
+Add `--nlp` to CI scan steps and org baseline policy:
+
+```yaml
+- run: contextduty scan src/ --nlp --audit-log /tmp/audit.jsonl
+```
+
+NLP detection catches person names, organisations, locations, dates, and financial entities that regex cannot see. It provides a 10× improvement in unstructured PII detection with context-aware confidence scoring that suppresses false positives in code contexts (`import`, `def`, `localhost`).
+
+For HIPAA teams: enabling NLP is strongly recommended — medical records frequently contain unstructured name/date/org data that regex detectors miss.
 
 ---
 

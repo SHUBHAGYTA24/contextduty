@@ -15,7 +15,7 @@ That's it. The `contextduty` command is now available in your shell.
 ## Verify your setup
 
 ```bash
-make check          # format + lint + all 258 tests
+make check          # format + lint + all 305 tests
 contextduty demo    # see it working end-to-end
 ```
 
@@ -37,6 +37,7 @@ contextduty dashboard --demo                  # open audit dashboard
 | New detector (e.g. new AI service key) | `src/contextduty/detectors.py` — add one `Detector(name, re.compile(...))` |
 | New AI tool ignore file | `src/contextduty/adapters/ide.py` — add one `AITool(...)` entry |
 | New AI API endpoint | `src/contextduty/proxy/scope.py` — add host to `AI_API_HOSTS` |
+| New NLP entity type | `src/contextduty/nlp/_types.py` and `_scoring.py` — add entity label and context keywords |
 | Bug fix | Open an issue first, then a PR |
 | Docs | README.md, this file |
 

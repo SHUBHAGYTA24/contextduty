@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![296 Tests](https://img.shields.io/badge/tests-296%20passing-brightgreen.svg)](#)
+[![305 Tests](https://img.shields.io/badge/tests-305%20passing-brightgreen.svg)](#)
 
 ---
 
@@ -393,7 +393,21 @@ contextduty dashboard --demo    # try it with synthetic data
 contextduty dashboard           # reads ~/.contextduty/audit.jsonl
 ```
 
-Local web UI with dark theme: findings by detector, 30-day timeline, blocked commits, developer activity, CSV export. Zero dependencies, all data stays on your machine.
+![ContextDuty Audit Dashboard](demo/dashboard-preview.png)
+
+Local web UI — zero dependencies, all data stays on your machine:
+
+| Section | What it shows |
+|---|---|
+| **Summary cards** | Total scans, findings, blocked commits, clean scan rate |
+| **Detection method breakdown** | Regex vs NLP finding split with coverage ratio |
+| **Findings by detector** | Top 15 detectors ranked by finding count |
+| **30-day timeline** | Daily findings trend with gridlines and data points |
+| **Operations / Developers / Hotspot files** | Donut chart, per-user bar chart, files with most findings |
+| **Recent activity** | Filterable table with search + status chips (All / Blocked / Warnings / Clean) |
+| **Export** | JSON API (`/api/data`) and CSV download |
+
+Auto-refreshes every 30 seconds. Dark theme. Responsive layout.
 
 ---
 
@@ -483,7 +497,7 @@ src/contextduty/
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
 pip install -e ".[dev]"
-make check    # format + lint + 296 tests
+make check    # format + lint + 305 tests
 ```
 
 ---

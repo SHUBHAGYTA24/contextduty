@@ -254,7 +254,7 @@ _HTML = r"""<!DOCTYPE html>
 <title>ContextDuty — Audit Dashboard</title>
 <style>
   :root {
-    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2129; --border: #30363d;
     --text: #c9d1d9; --muted: #8b949e; --heading: #f0f6fc;
     --blue: #388bfd; --green: #3fb950; --yellow: #d29922;
     --red: #f85149; --purple: #a371f7; --orange: #ffa657;
@@ -262,38 +262,53 @@ _HTML = r"""<!DOCTYPE html>
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont,
-    'Segoe UI', monospace; font-size: 14px; min-height: 100vh; }
+    'Segoe UI', Helvetica, Arial, sans-serif; font-size: 14px; min-height: 100vh; }
 
   /* Header */
   .header { background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
-    position: sticky; top: 0; z-index: 10; }
+    padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(8px);
+    background: rgba(22,27,34,.85); }
   .logo { display: flex; align-items: center; gap: 10px; }
-  .logo-icon { width: 28px; height: 28px; background: var(--blue); border-radius: 6px;
-    display: flex; align-items: center; justify-content: center; font-size: 16px; }
-  .logo-text { font-size: 16px; font-weight: 600; color: var(--heading); }
-  .logo-sub { font-size: 12px; color: var(--muted); margin-left: 4px; }
-  .header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--muted); }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--blue), var(--purple));
+    border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-size: 16px; font-weight: 700; color: var(--heading); letter-spacing: -.02em; }
+  .logo-sub { font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 400; }
+  .header-right { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--muted); }
   .refresh-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%;
     display: inline-block; margin-right: 4px; animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
   .btn { background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
-    text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-  .btn:hover { border-color: var(--blue); color: var(--blue); }
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: all .15s; font-weight: 500; }
+  .btn:hover { border-color: var(--blue); color: var(--blue); background: rgba(56,139,253,.08); }
 
   /* Layout */
   .main { padding: 24px; max-width: 1400px; margin: 0 auto; }
   .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 900px) { .grid-4 { grid-template-columns: 1fr 1fr; }
-    .grid-2 { grid-template-columns: 1fr; } }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; } }
 
   /* Cards */
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
-  .card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
-  .card-value { font-size: 32px; font-weight: 700; color: var(--heading); line-height: 1; }
-  .card-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; transition: border-color .2s; }
+  .card:hover { border-color: rgba(56,139,253,.3); }
+  .stat-card { border-left: 3px solid var(--border); }
+  .stat-card.card-blue { border-left-color: var(--blue); }
+  .stat-card.card-yellow { border-left-color: var(--yellow); }
+  .stat-card.card-red { border-left-color: var(--red); }
+  .stat-card.card-green { border-left-color: var(--green); }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .card-icon { font-size: 18px; opacity: .8; }
+  .card-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); font-weight: 600; }
+  .card-value { font-size: 36px; font-weight: 800; color: var(--heading); line-height: 1;
+    letter-spacing: -.02em; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .card-blue .card-value { color: var(--blue); }
   .card-yellow .card-value { color: var(--yellow); }
   .card-red .card-value { color: var(--red); }
@@ -301,46 +316,61 @@ _HTML = r"""<!DOCTYPE html>
 
   /* Section headings */
   .section-head { font-size: 13px; font-weight: 600; color: var(--heading);
-    margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; }
+  .section-head .section-icon { font-size: 15px; opacity: .7; }
 
   /* Detector bars */
-  .det-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .det-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    padding: 4px 0; transition: opacity .15s; }
+  .det-row:hover { opacity: .85; }
   .det-name { font-size: 12px; color: var(--text); width: 180px; flex-shrink: 0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .det-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden; }
-  .det-bar { height: 100%; border-radius: 4px; background: var(--blue); transition: width .4s ease; }
-  .det-count { font-size: 12px; color: var(--muted); width: 40px; text-align: right; flex-shrink: 0; }
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .det-bar-wrap { flex: 1; background: var(--bg); border-radius: 7px; height: 14px;
+    overflow: hidden; }
+  .det-bar { height: 100%; border-radius: 7px; background: var(--blue);
+    transition: width .5s cubic-bezier(.4,0,.2,1); min-width: 4px; }
+  .det-count { font-size: 12px; color: var(--muted); width: 40px; text-align: right;
+    flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 
   /* SVG Timeline */
   .timeline-wrap { overflow: hidden; }
-  svg.timeline { width: 100%; height: 160px; }
+  svg.timeline { width: 100%; height: 180px; }
   .tl-label { font-size: 10px; fill: var(--muted); }
+  .tl-grid { stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 0.5; }
+  .tl-dot { fill: var(--blue); transition: r .15s; cursor: pointer; }
+  .tl-dot:hover { r: 5; }
 
   /* Activity table */
   .tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .tbl th { text-align: left; color: var(--muted); font-weight: 500;
-    padding: 8px 12px; border-bottom: 1px solid var(--border);
-    font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  .tbl td { padding: 9px 12px; border-bottom: 1px solid rgba(48,54,61,.5);
-    vertical-align: middle; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .tbl th { text-align: left; color: var(--muted); font-weight: 600;
+    padding: 10px 12px; border-bottom: 2px solid var(--border);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    position: sticky; top: 54px; background: var(--surface); z-index: 5; }
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid rgba(48,54,61,.4);
+    vertical-align: middle; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11.5px; }
   .tbl tr:last-child td { border-bottom: none; }
-  .tbl tr:hover td { background: rgba(56,139,253,.05); }
-  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px;
-    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .badge-red { background: rgba(248,81,73,.15); color: var(--red); }
-  .badge-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
-  .badge-green { background: rgba(63,185,80,.15); color: var(--green); }
-  .badge-blue { background: rgba(56,139,253,.15); color: var(--blue); }
-  .badge-purple { background: rgba(163,113,247,.15); color: var(--purple); }
-  .chip { display: inline-block; padding: 2px 6px; border-radius: 3px;
-    font-size: 10px; background: rgba(56,139,253,.1); color: var(--blue); margin: 1px; }
+  .tbl tr:nth-child(even) td { background: rgba(22,27,34,.3); }
+  .tbl tr:hover td { background: rgba(56,139,253,.06); }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 5px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .badge-red { background: rgba(248,81,73,.12); color: var(--red); }
+  .badge-yellow { background: rgba(210,153,34,.12); color: var(--yellow); }
+  .badge-green { background: rgba(63,185,80,.12); color: var(--green); }
+  .badge-blue { background: rgba(56,139,253,.12); color: var(--blue); }
+  .badge-purple { background: rgba(163,113,247,.12); color: var(--purple); }
+  .chip { display: inline-block; padding: 2px 7px; border-radius: 4px;
+    font-size: 10px; background: rgba(56,139,253,.08); color: var(--blue);
+    margin: 1px; font-weight: 500; }
 
   /* Donut */
-  .donut-wrap { display: flex; align-items: center; gap: 20px; }
-  svg.donut { width: 100px; height: 100px; flex-shrink: 0; }
+  .donut-wrap { display: flex; align-items: center; gap: 24px; }
+  svg.donut { width: 110px; height: 110px; flex-shrink: 0; }
   .donut-legend { flex: 1; }
-  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    font-size: 12px; font-weight: 500; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
   /* Empty state */
   .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
@@ -349,35 +379,38 @@ _HTML = r"""<!DOCTYPE html>
     padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--blue); }
 
   /* Demo banner */
-  .demo-banner { background: rgba(163,113,247,.1); border: 1px solid rgba(163,113,247,.3);
-    border-radius: 6px; padding: 10px 16px; margin-bottom: 20px;
-    font-size: 12px; color: var(--purple); display: flex; align-items: center; gap: 8px; }
+  .demo-banner { background: rgba(163,113,247,.08); border: 1px solid rgba(163,113,247,.25);
+    border-radius: 8px; padding: 12px 18px; margin-bottom: 20px;
+    font-size: 12px; color: var(--purple); display: flex; align-items: center; gap: 10px;
+    line-height: 1.5; }
 
   /* Scrollable table */
-  .table-scroll { overflow-x: auto; }
+  .table-scroll { overflow-x: auto; max-height: 520px; overflow-y: auto; }
 
   /* Detection method bar */
-  .method-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden;
-    margin-top: 8px; background: var(--bg); }
-  .method-bar-seg { height: 100%; transition: width .4s ease; }
-  .method-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; }
-  .method-legend-item { display: flex; align-items: center; gap: 5px; }
-  .method-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .method-bar { display: flex; height: 24px; border-radius: 12px; overflow: hidden;
+    background: var(--bg); position: relative; }
+  .method-bar-seg { height: 100%; transition: width .5s cubic-bezier(.4,0,.2,1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--heading); min-width: 40px; }
+  .method-legend { display: flex; gap: 20px; margin-top: 12px; font-size: 12px; }
+  .method-legend-item { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+  .method-dot { width: 10px; height: 10px; border-radius: 3px; }
 
   /* Filter bar */
   .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
   .filter-input { background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 7px 12px; border-radius: 6px; font-size: 12px; flex: 1; min-width: 180px;
-    font-family: inherit; outline: none; }
-  .filter-input:focus { border-color: var(--blue); }
+    padding: 8px 14px; border-radius: 8px; font-size: 12px; flex: 1; min-width: 200px;
+    font-family: inherit; outline: none; transition: border-color .15s; }
+  .filter-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(56,139,253,.1); }
   .filter-input::placeholder { color: var(--muted); }
   .filter-chips { display: flex; gap: 6px; }
   .filter-chip { background: var(--bg); border: 1px solid var(--border); color: var(--muted);
-    padding: 5px 10px; border-radius: 14px; font-size: 11px; cursor: pointer;
-    transition: all .15s; user-select: none; }
+    padding: 6px 12px; border-radius: 16px; font-size: 11px; cursor: pointer;
+    transition: all .15s; user-select: none; font-weight: 500; }
   .filter-chip:hover { border-color: var(--blue); color: var(--text); }
-  .filter-chip.active { background: rgba(56,139,253,.15); border-color: var(--blue);
-    color: var(--blue); font-weight: 600; }
+  .filter-chip.active { background: rgba(56,139,253,.12); border-color: var(--blue);
+    color: var(--blue); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -407,23 +440,27 @@ _HTML = r"""<!DOCTYPE html>
 
   <!-- Summary cards -->
   <div class="grid-4" id="cards">
-    <div class="card card-blue"><div class="card-label">Total scans</div>
+    <div class="card stat-card card-blue">
+      <div class="card-header"><span class="card-icon">&#128269;</span><div class="card-label">Total scans</div></div>
       <div class="card-value" id="c-scans">—</div>
       <div class="card-sub" id="c-ops">—</div></div>
-    <div class="card card-yellow"><div class="card-label">Total findings</div>
+    <div class="card stat-card card-yellow">
+      <div class="card-header"><span class="card-icon">&#9888;&#65039;</span><div class="card-label">Total findings</div></div>
       <div class="card-value" id="c-findings">—</div>
       <div class="card-sub" id="c-detectors">—</div></div>
-    <div class="card card-red"><div class="card-label">Commits blocked</div>
+    <div class="card stat-card card-red">
+      <div class="card-header"><span class="card-icon">&#128721;</span><div class="card-label">Commits blocked</div></div>
       <div class="card-value" id="c-blocked">—</div>
       <div class="card-sub" id="c-blockrate">—</div></div>
-    <div class="card card-green"><div class="card-label">Clean scans</div>
+    <div class="card stat-card card-green">
+      <div class="card-header"><span class="card-icon">&#9989;</span><div class="card-label">Clean scans</div></div>
       <div class="card-value" id="c-clean">—</div>
       <div class="card-sub" id="c-cleanpct">—</div></div>
   </div>
 
   <!-- Detection method breakdown -->
   <div class="card" style="margin-bottom:24px">
-    <div class="section-head">Detection method breakdown</div>
+    <div class="section-head"><span class="section-icon">&#129504;</span> Detection method breakdown</div>
     <div id="method-breakdown">
       <div class="method-bar">
         <div class="method-bar-seg" id="mb-regex" style="background:var(--blue);width:50%"></div>
@@ -440,43 +477,42 @@ _HTML = r"""<!DOCTYPE html>
   <div class="grid-2">
     <!-- Detector breakdown -->
     <div class="card">
-      <div class="section-head">Findings by detector</div>
+      <div class="section-head"><span class="section-icon">&#128202;</span> Findings by detector</div>
       <div id="detector-bars"><div class="empty"><div class="empty-icon">📊</div>No data yet</div></div>
     </div>
     <!-- Timeline -->
     <div class="card">
-      <div class="section-head">Findings — last 30 days</div>
+      <div class="section-head"><span class="section-icon">&#128200;</span> Findings — last 30 days</div>
       <div class="timeline-wrap" id="timeline-wrap">
         <div class="empty"><div class="empty-icon">📈</div>No data yet</div>
       </div>
     </div>
   </div>
 
-  <div class="grid-2">
+  <div class="grid-3">
     <!-- Operations / tool breakdown -->
     <div class="card">
-      <div class="section-head">Operations by source</div>
+      <div class="section-head"><span class="section-icon">&#128260;</span> Operations</div>
       <div id="ops-chart" class="donut-wrap">
         <div class="empty" style="flex:1"><div class="empty-icon">🔄</div>No data yet</div>
       </div>
     </div>
     <!-- Top users -->
     <div class="card">
-      <div class="section-head">Scans by developer</div>
+      <div class="section-head"><span class="section-icon">&#128101;</span> Developers</div>
       <div id="user-bars"><div class="empty"><div class="empty-icon">👤</div>No data yet</div></div>
     </div>
-  </div>
-
-  <!-- Top targets -->
-  <div class="card" style="margin-bottom:24px">
-    <div class="section-head">Top targets — files with most findings</div>
-    <div id="target-bars"><div class="empty"><div class="empty-icon">📁</div>No data yet</div></div>
+    <!-- Top targets -->
+    <div class="card">
+      <div class="section-head"><span class="section-icon">&#128196;</span> Hotspot files</div>
+      <div id="target-bars"><div class="empty"><div class="empty-icon">📁</div>No data yet</div></div>
+    </div>
   </div>
 
   <!-- Activity feed -->
   <div class="card">
     <div class="section-head" style="display:flex;justify-content:space-between">
-      <span>Recent activity</span>
+      <span><span class="section-icon">&#128337;</span> Recent activity</span>
       <span id="activity-count" style="font-weight:400;color:var(--muted)"></span>
     </div>
     <div class="filter-bar">
@@ -589,7 +625,9 @@ function renderMethodBreakdown(methods) {
   const rPct = Math.round(100 * regex / total);
   const nPct = 100 - rPct;
   document.getElementById('mb-regex').style.width = rPct + '%';
+  document.getElementById('mb-regex').textContent = rPct + '%';
   document.getElementById('mb-nlp').style.width = nPct + '%';
+  document.getElementById('mb-nlp').textContent = nPct + '%';
   document.getElementById('mb-regex-n').textContent = `(${regex})`;
   document.getElementById('mb-nlp-n').textContent = `(${nlp})`;
   if (nlp > 0 && regex > 0) {
@@ -678,7 +716,7 @@ function renderTimeline(daily) {
   const vals = days.map(d => daily[d]);
   const maxV = Math.max(...vals, 1);
 
-  const W = 500, H = 140, PL = 4, PR = 4, PT = 10, PB = 30;
+  const W = 500, H = 180, PL = 30, PR = 10, PT = 15, PB = 30;
   const w = W - PL - PR, h = H - PT - PB;
   const xs = days.map((_, i) => PL + (i / (days.length - 1)) * w);
   const ys = vals.map(v => PT + h - (v / maxV) * h);
@@ -686,23 +724,38 @@ function renderTimeline(daily) {
   const path = xs.map((x, i) => (i === 0 ? 'M' : 'L') + `${x},${ys[i]}`).join(' ');
   const area = `${path} L${xs[xs.length-1]},${PT+h} L${xs[0]},${PT+h} Z`;
 
+  // Horizontal gridlines
+  const gridCount = 4;
+  let gridlines = '';
+  for (let g = 0; g <= gridCount; g++) {
+    const gy = PT + (h / gridCount) * g;
+    const gv = Math.round(maxV * (1 - g / gridCount));
+    gridlines += `<line x1="${PL}" y1="${gy}" x2="${W-PR}" y2="${gy}" class="tl-grid"/>`;
+    gridlines += `<text x="${PL-4}" y="${gy+3}" class="tl-label" text-anchor="end">${gv}</text>`;
+  }
+
   // x-axis labels — every 7 days
   const xlabels = days
     .map((d, i) => i % 7 === 0 ? `<text x="${xs[i]}" y="${H-4}" class="tl-label" text-anchor="middle">${d.slice(5)}</text>` : '')
     .join('');
 
-  el.innerHTML = `<svg class="timeline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+  // Data point dots
+  const dots = xs.map((x, i) =>
+    vals[i] > 0 ? `<circle cx="${x}" cy="${ys[i]}" r="3" class="tl-dot"><title>${days[i]}: ${vals[i]}</title></circle>` : ''
+  ).join('');
+
+  el.innerHTML = `<svg class="timeline" viewBox="0 0 ${W} ${H}">
     <defs>
       <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="#388bfd" stop-opacity=".25"/>
-        <stop offset="100%" stop-color="#388bfd" stop-opacity="0"/>
+        <stop offset="0%" stop-color="#388bfd" stop-opacity=".3"/>
+        <stop offset="100%" stop-color="#388bfd" stop-opacity=".02"/>
       </linearGradient>
     </defs>
+    ${gridlines}
     <path d="${area}" fill="url(#grad)"/>
-    <path d="${path}" fill="none" stroke="#388bfd" stroke-width="2" stroke-linejoin="round"/>
-    <line x1="${PL}" y1="${PT+h}" x2="${W-PR}" y2="${PT+h}" stroke="#30363d" stroke-width="1"/>
+    <path d="${path}" fill="none" stroke="#388bfd" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
     ${xlabels}
-    <text x="${PL}" y="${PT+4}" class="tl-label">${maxV}</text>
   </svg>`;
 }
 

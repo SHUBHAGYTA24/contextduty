@@ -354,7 +354,7 @@ _HTML = r"""<!DOCTYPE html>
   .tbl th { text-align: left; color: var(--muted); font-weight: 600;
     padding: 10px 12px; border-bottom: 2px solid var(--border);
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-    position: sticky; top: 54px; background: var(--surface); z-index: 5; }
+    position: sticky; top: 0; background: var(--surface); z-index: 5; }
   .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border);
     vertical-align: middle; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 11.5px; }

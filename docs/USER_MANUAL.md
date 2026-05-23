@@ -258,8 +258,10 @@ With `"mode": "block"` in your policy, the pipeline fails and the PR cannot merg
 | 7a | `pip install 'contextduty[proxy]'` | Optional — proxy dependencies |
 | 7b | `contextduty proxy setup` | Optional — one-time CA cert (needs sudo) |
 | 7c | `contextduty proxy start` | Optional — start HTTPS interception |
-| 8 | Add MCP config | Optional — intercept AI tool calls |
-| 9 | Add CI/CD workflow | Optional — block secrets in PRs |
+| 8a | `pip install 'contextduty[nlp]'` | Optional — NLP PII detection (spaCy) |
+| 8b | `python -m spacy download en_core_web_sm` | Optional — download spaCy model (12 MB) |
+| 9 | Add MCP config | Optional — intercept AI tool calls |
+| 10 | Add CI/CD workflow | Optional — block secrets in PRs |
 
 ---
 
@@ -284,6 +286,34 @@ contextduty redact --in secrets.py --out secrets.clean.py
 
 ---
 
+## NLP-based PII detection (optional)
+
+Install the NLP extra to catch names, organisations, and dates that regex cannot see:
+
+```bash
+pip install 'contextduty[nlp]'
+python -m spacy download en_core_web_sm
+```
+
+Then add `--nlp` to any scan:
+
+```bash
+contextduty scan --nlp src/
+contextduty scan --nlp --nlp-confidence 0.7 notebook.ipynb
+```
+
+NLP findings appear alongside regex findings in the output:
+
+```
+🧠 NLP-detected PII:
+  • nlp_person: John Smith [confidence: 0.95]
+  • nlp_org: Acme Bank [confidence: 0.80]
+```
+
+**Context-aware scoring** — confidence is boosted near PII keywords (`patient`, `SSN`, `account`) and suppressed in code contexts (`import`, `def`, `localhost`).
+
+---
+
 ## Audit log and dashboard
 
 Every interception can be recorded to a JSONL audit log:
@@ -298,6 +328,8 @@ Open the dashboard to browse findings:
 contextduty dashboard                  # reads ~/.contextduty/audit.jsonl
 contextduty dashboard --demo           # try with synthetic data
 ```
+
+The dashboard shows a **detection method breakdown** (Regex vs NLP share) and **hotspot files** — the files generating the most findings. Use the **light/dark theme toggle** in the top-right corner. The activity table supports live filtering by filename, detector, user, or status.
 
 ---
 

@@ -104,6 +104,13 @@ contextduty proxy start          # start intercepting
 > Secrets detected → redacted with deterministic masks → commit blocked → AI tools protected.  
 > Run it yourself: `contextduty demo`
 
+## NLP demo — catch what regex misses
+
+![ContextDuty NLP demo](examples/nlp-demo/nlp-demo.gif)
+
+> 10x more findings: person names, organizations, dates, and medical entities that regex can't see.  
+> Run it yourself: `contextduty scan --nlp src/`
+
 ---
 
 ## Layer 1 — Universal workspace protection
@@ -277,7 +284,7 @@ clean = redact("db = postgres://admin:secret@prod:5432/app")
 
 ---
 
-## Detection: 43 built-in detectors
+## Detection: 60 built-in detectors
 
 | Category | Detectors |
 |---|---|
@@ -407,7 +414,7 @@ Local web UI — zero dependencies, all data stays on your machine:
 | **Recent activity** | Filterable table with search + status chips (All / Blocked / Warnings / Clean) |
 | **Export** | JSON API (`/api/data`) and CSV download |
 
-Auto-refreshes every 30 seconds. Dark theme. Responsive layout.
+Auto-refreshes every 30 seconds. Light/dark theme toggle. Responsive layout.
 
 ---
 
@@ -441,7 +448,7 @@ Auto-refreshes every 30 seconds. Dark theme. Responsive layout.
 ```
 src/contextduty/
 ├── config.py              # Centralized paths, env vars, constants
-├── engine.py              # Core scan/redact engine (43 detectors, .ipynb support)
+├── engine.py              # Core scan/redact engine (60 detectors, .ipynb support)
 ├── detectors.py           # Regex detector definitions
 ├── policy.py              # Policy loading, validation, inheritance
 ├── cli.py                 # CLI entry point (18 commands)
@@ -504,7 +511,7 @@ make check    # format + lint + 305 tests
 
 ## Roadmap
 
-- [x] 43 built-in detectors
+- [x] 60 built-in detectors
 - [x] Pre-commit hook (`contextduty install-hooks`)
 - [x] MCP server (Cursor, Claude, VS Code)
 - [x] Directory scanning (`contextduty scan src/`)

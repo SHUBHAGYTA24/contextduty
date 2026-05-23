@@ -52,6 +52,13 @@ _DETECTOR_LABELS: dict[str, str] = {
     "private_key_pem": "PEM private key",
     "jwt": "JWT token",
     "env_secret": ".env secret variable",
+    # NLP detectors
+    "nlp_person": "Person name (NLP)",
+    "nlp_org": "Organization (NLP)",
+    "nlp_location": "Location (NLP)",
+    "nlp_date": "Date (NLP)",
+    "nlp_money": "Monetary value (NLP)",
+    "nlp_norp": "Group/nationality (NLP)",
 }
 
 
@@ -112,6 +119,19 @@ def _aggregate(entries: list[dict[str, Any]]) -> dict[str, Any]:
 
     recent = sorted(entries, key=lambda e: e.get("ts", ""), reverse=True)[:50]
 
+    # Detection method breakdown (regex vs NLP)
+    regex_findings = sum(v for k, v in detector_totals.items() if not k.startswith("nlp_"))
+    nlp_findings = sum(v for k, v in detector_totals.items() if k.startswith("nlp_"))
+
+    # Top targets — files with most findings
+    target_totals: dict[str, int] = {}
+    for e in entries:
+        t = e.get("target", "unknown")
+        fc = e.get("findings_count", 0)
+        if fc > 0:
+            target_totals[t] = target_totals.get(t, 0) + fc
+    target_totals = dict(sorted(target_totals.items(), key=lambda x: x[1], reverse=True)[:10])
+
     detector_labels = {k: _DETECTOR_LABELS.get(k, k) for k in detector_totals}
 
     return {
@@ -130,6 +150,8 @@ def _aggregate(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "users": users,
         "operations": operations,
         "recent": recent,
+        "detection_methods": {"regex": regex_findings, "nlp": nlp_findings},
+        "target_totals": target_totals,
         "generated_at": now.isoformat(),
     }
 
@@ -173,6 +195,10 @@ def _build_demo_entries() -> list[dict[str, Any]]:
         ("env_secret", 2),
         ("anthropic_key", 1),
         ("huggingface_token", 1),
+        ("nlp_person", 3),
+        ("nlp_org", 2),
+        ("nlp_location", 1),
+        ("nlp_date", 2),
     ]
     operations = ["scan", "scan", "scan", "redact", "scan", "scan", "redact"]
 
@@ -329,6 +355,29 @@ _HTML = r"""<!DOCTYPE html>
 
   /* Scrollable table */
   .table-scroll { overflow-x: auto; }
+
+  /* Detection method bar */
+  .method-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+    margin-top: 8px; background: var(--bg); }
+  .method-bar-seg { height: 100%; transition: width .4s ease; }
+  .method-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; }
+  .method-legend-item { display: flex; align-items: center; gap: 5px; }
+  .method-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-input { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: 6px; font-size: 12px; flex: 1; min-width: 180px;
+    font-family: inherit; outline: none; }
+  .filter-input:focus { border-color: var(--blue); }
+  .filter-input::placeholder { color: var(--muted); }
+  .filter-chips { display: flex; gap: 6px; }
+  .filter-chip { background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 10px; border-radius: 14px; font-size: 11px; cursor: pointer;
+    transition: all .15s; user-select: none; }
+  .filter-chip:hover { border-color: var(--blue); color: var(--text); }
+  .filter-chip.active { background: rgba(56,139,253,.15); border-color: var(--blue);
+    color: var(--blue); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -372,6 +421,22 @@ _HTML = r"""<!DOCTYPE html>
       <div class="card-sub" id="c-cleanpct">—</div></div>
   </div>
 
+  <!-- Detection method breakdown -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-head">Detection method breakdown</div>
+    <div id="method-breakdown">
+      <div class="method-bar">
+        <div class="method-bar-seg" id="mb-regex" style="background:var(--blue);width:50%"></div>
+        <div class="method-bar-seg" id="mb-nlp" style="background:var(--purple);width:50%"></div>
+      </div>
+      <div class="method-legend">
+        <div class="method-legend-item"><div class="method-dot" style="background:var(--blue)"></div>Regex <span id="mb-regex-n" style="color:var(--muted)">—</span></div>
+        <div class="method-legend-item"><div class="method-dot" style="background:var(--purple)"></div>NLP <span id="mb-nlp-n" style="color:var(--muted)">—</span></div>
+        <span id="mb-ratio" style="margin-left:auto;color:var(--muted);font-size:11px"></span>
+      </div>
+    </div>
+  </div>
+
   <div class="grid-2">
     <!-- Detector breakdown -->
     <div class="card">
@@ -402,11 +467,27 @@ _HTML = r"""<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Top targets -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-head">Top targets — files with most findings</div>
+    <div id="target-bars"><div class="empty"><div class="empty-icon">📁</div>No data yet</div></div>
+  </div>
+
   <!-- Activity feed -->
   <div class="card">
     <div class="section-head" style="display:flex;justify-content:space-between">
       <span>Recent activity</span>
       <span id="activity-count" style="font-weight:400;color:var(--muted)"></span>
+    </div>
+    <div class="filter-bar">
+      <input type="text" class="filter-input" id="filter-input"
+        placeholder="Search files, detectors, users…">
+      <div class="filter-chips">
+        <div class="filter-chip active" data-filter="all" onclick="setFilter(this)">All</div>
+        <div class="filter-chip" data-filter="blocked" onclick="setFilter(this)">Blocked</div>
+        <div class="filter-chip" data-filter="warn" onclick="setFilter(this)">Warnings</div>
+        <div class="filter-chip" data-filter="clean" onclick="setFilter(this)">Clean</div>
+      </div>
     </div>
     <div class="table-scroll">
       <table class="tbl">
@@ -486,12 +567,95 @@ function render(d) {
   // Demo banner
   if (d.demo) document.getElementById('demo-banner').style.display = 'flex';
 
+  renderMethodBreakdown(d.detection_methods || {});
   renderDetectorBars(d.detector_totals, d.detector_labels);
   renderTimeline(d.daily_findings);
   renderOps(d.operations || {});
   renderUserBars(d.users || {});
+  renderTopTargets(d.target_totals || {});
   renderActivity(d.recent || []);
+  applyFilters();
 }
+
+function renderMethodBreakdown(methods) {
+  const regex = methods.regex || 0;
+  const nlp = methods.nlp || 0;
+  const total = regex + nlp;
+  if (total === 0) {
+    document.getElementById('method-breakdown').innerHTML =
+      '<div style="color:var(--muted);font-size:12px">No findings yet</div>';
+    return;
+  }
+  const rPct = Math.round(100 * regex / total);
+  const nPct = 100 - rPct;
+  document.getElementById('mb-regex').style.width = rPct + '%';
+  document.getElementById('mb-nlp').style.width = nPct + '%';
+  document.getElementById('mb-regex-n').textContent = `(${regex})`;
+  document.getElementById('mb-nlp-n').textContent = `(${nlp})`;
+  if (nlp > 0 && regex > 0) {
+    document.getElementById('mb-ratio').textContent =
+      `NLP adds ${Math.round(100*nlp/regex)}% more coverage`;
+  } else if (nlp > 0) {
+    document.getElementById('mb-ratio').textContent = '100% NLP detections';
+  }
+}
+
+function renderTopTargets(targets) {
+  const el = document.getElementById('target-bars');
+  const entries = Object.entries(targets);
+  if (!entries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📁</div>No findings in any file</div>'; return; }
+  const max = entries[0][1];
+  el.innerHTML = entries.map(([k,v], i) => {
+    const short = k.length > 40 ? '…' + k.slice(-39) : k;
+    return `<div class="det-row">
+      <div class="det-name" title="${k}">${short}</div>
+      <div class="det-bar-wrap">
+        <div class="det-bar" style="width:${Math.round(100*v/max)}%;background:${COLORS[(i+5)%COLORS.length]}"></div>
+      </div>
+      <div class="det-count">${v}</div>
+    </div>`;
+  }).join('');
+}
+
+let _activeFilter = 'all';
+let _searchQuery = '';
+
+function setFilter(chip) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  _activeFilter = chip.dataset.filter;
+  applyFilters();
+}
+
+function applyFilters() {
+  if (!_data) return;
+  const rows = _data.recent || [];
+  const q = _searchQuery.toLowerCase();
+  const filtered = rows.filter(e => {
+    // Status filter
+    if (_activeFilter === 'blocked' && !e.blocked) return false;
+    if (_activeFilter === 'warn' && (e.blocked || e.findings_count === 0)) return false;
+    if (_activeFilter === 'clean' && e.findings_count > 0) return false;
+    // Text search
+    if (q) {
+      const haystack = [
+        e.target || '', e.user || '', e.tool || '', e.operation || '',
+        ...Object.keys(e.detector_counts || {})
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+  renderActivity(filtered);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('filter-input');
+  if (inp) inp.addEventListener('input', (ev) => {
+    _searchQuery = ev.target.value;
+    applyFilters();
+  });
+});
 
 function renderDetectorBars(totals, labels) {
   const el = document.getElementById('detector-bars');

@@ -253,12 +253,19 @@ _HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ContextDuty — Audit Dashboard</title>
 <style>
-  :root {
+  :root, [data-theme="dark"] {
     --bg: #0d1117; --surface: #161b22; --surface2: #1c2129; --border: #30363d;
     --text: #c9d1d9; --muted: #8b949e; --heading: #f0f6fc;
     --blue: #388bfd; --green: #3fb950; --yellow: #d29922;
     --red: #f85149; --purple: #a371f7; --orange: #ffa657;
     --cyan: #39d353;
+  }
+  [data-theme="light"] {
+    --bg: #ffffff; --surface: #f6f8fa; --surface2: #eef1f5; --border: #d0d7de;
+    --text: #1f2328; --muted: #656d76; --heading: #1f2328;
+    --blue: #0969da; --green: #1a7f37; --yellow: #9a6700;
+    --red: #cf222e; --purple: #8250df; --orange: #bc4c00;
+    --cyan: #0e8a16;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont,
@@ -268,7 +275,8 @@ _HTML = r"""<!DOCTYPE html>
   .header { background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
     position: sticky; top: 0; z-index: 10; backdrop-filter: blur(8px);
-    background: rgba(22,27,34,.85); }
+    background: var(--header-bg, rgba(22,27,34,.85)); }
+  [data-theme="light"] .header { --header-bg: rgba(246,248,250,.85); }
   .logo { display: flex; align-items: center; gap: 10px; }
   .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, var(--blue), var(--purple));
     border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
@@ -347,12 +355,12 @@ _HTML = r"""<!DOCTYPE html>
     padding: 10px 12px; border-bottom: 2px solid var(--border);
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
     position: sticky; top: 54px; background: var(--surface); z-index: 5; }
-  .tbl td { padding: 10px 12px; border-bottom: 1px solid rgba(48,54,61,.4);
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border);
     vertical-align: middle; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 11.5px; }
   .tbl tr:last-child td { border-bottom: none; }
-  .tbl tr:nth-child(even) td { background: rgba(22,27,34,.3); }
-  .tbl tr:hover td { background: rgba(56,139,253,.06); }
+  .tbl tr:nth-child(even) td { background: var(--surface2); }
+  .tbl tr:hover td { background: rgba(56,139,253,.08); }
   .badge { display: inline-block; padding: 3px 8px; border-radius: 5px;
     font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
   .badge-red { background: rgba(248,81,73,.12); color: var(--red); }
@@ -426,6 +434,7 @@ _HTML = r"""<!DOCTYPE html>
   <div class="header-right">
     <span id="refresh-status"><span class="refresh-dot"></span>Live</span>
     <span id="last-updated">—</span>
+    <button class="btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌙 Dark</button>
     <a href="/api/data" class="btn" target="_blank">⬇ JSON</a>
     <button class="btn" onclick="exportCsv()">⬇ CSV</button>
   </div>
@@ -883,6 +892,31 @@ function exportCsv() {
   a.download = `contextduty-audit-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const btn = document.getElementById('theme-toggle');
+  if (html.getAttribute('data-theme') === 'light') {
+    html.setAttribute('data-theme', 'dark');
+    btn.textContent = '🌙 Dark';
+    localStorage.setItem('cd-theme', 'dark');
+  } else {
+    html.setAttribute('data-theme', 'light');
+    btn.textContent = '☀️ Light';
+    localStorage.setItem('cd-theme', 'light');
+  }
+}
+
+// Restore saved theme preference
+(function() {
+  const saved = localStorage.getItem('cd-theme');
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('theme-toggle').textContent = '☀️ Light';
+    });
+  }
+})();
 
 fetchData();
 </script>

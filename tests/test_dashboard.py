@@ -192,3 +192,102 @@ def test_server_404():
     with pytest.raises(urllib.error.HTTPError) as exc:
         urllib.request.urlopen(req, timeout=5)
     assert exc.value.code == 404
+
+
+# ---------------------------------------------------------------------------
+# New dashboard v2 features
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_detection_methods():
+    entries = [
+        {
+            "ts": "2026-05-01T10:00:00Z",
+            "operation": "scan",
+            "target": "app.py",
+            "findings_count": 5,
+            "blocked": False,
+            "detector_counts": {"email": 2, "nlp_person": 3},
+        },
+    ]
+    agg = _aggregate(entries)
+    assert agg["detection_methods"]["regex"] == 2
+    assert agg["detection_methods"]["nlp"] == 3
+
+
+def test_aggregate_target_totals():
+    entries = [
+        {
+            "ts": "2026-05-01T10:00:00Z",
+            "operation": "scan",
+            "target": "config.py",
+            "findings_count": 5,
+            "blocked": False,
+            "detector_counts": {"aws_key": 5},
+        },
+        {
+            "ts": "2026-05-01T11:00:00Z",
+            "operation": "scan",
+            "target": "config.py",
+            "findings_count": 3,
+            "blocked": False,
+            "detector_counts": {"email": 3},
+        },
+        {
+            "ts": "2026-05-01T12:00:00Z",
+            "operation": "scan",
+            "target": "app.py",
+            "findings_count": 1,
+            "blocked": False,
+            "detector_counts": {"email": 1},
+        },
+    ]
+    agg = _aggregate(entries)
+    assert agg["target_totals"]["config.py"] == 8
+    assert agg["target_totals"]["app.py"] == 1
+    # Sorted descending
+    keys = list(agg["target_totals"].keys())
+    assert keys[0] == "config.py"
+
+
+def test_aggregate_target_totals_excludes_clean():
+    entries = [
+        {
+            "ts": "2026-05-01T10:00:00Z",
+            "operation": "scan",
+            "target": "clean.py",
+            "findings_count": 0,
+            "blocked": False,
+            "detector_counts": {},
+        },
+    ]
+    agg = _aggregate(entries)
+    assert "clean.py" not in agg["target_totals"]
+
+
+def test_demo_entries_include_nlp_detectors():
+    entries = _build_demo_entries()
+    all_detectors = set()
+    for e in entries:
+        all_detectors.update(e.get("detector_counts", {}).keys())
+    nlp_dets = {d for d in all_detectors if d.startswith("nlp_")}
+    assert len(nlp_dets) > 0, "Demo data should include NLP detectors"
+
+
+def test_server_api_data_has_new_fields():
+    port = _start_server(demo=True)
+    resp = urllib.request.urlopen(f"http://localhost:{port}/api/data", timeout=5)
+    data = json.loads(resp.read())
+    assert "detection_methods" in data
+    assert "target_totals" in data
+    assert "regex" in data["detection_methods"]
+    assert "nlp" in data["detection_methods"]
+
+
+def test_html_contains_new_sections():
+    port = _start_server(demo=True)
+    resp = urllib.request.urlopen(f"http://localhost:{port}/", timeout=5)
+    html = resp.read().decode()
+    assert "method-breakdown" in html
+    assert "target-bars" in html
+    assert "filter-input" in html

@@ -46,6 +46,8 @@ class ScanResult:
     blocked_by: list[str] = None  # type: ignore[assignment]
     # Files scanned (populated by scan_dir; empty for single-file scans).
     files_scanned: list[str] = field(default_factory=list)
+    # Files that had at least one finding (subset of files_scanned).
+    files_with_findings: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.blocked_by is None:
@@ -241,9 +243,12 @@ def _merge_results(
     combined_counts: dict[str, int] = {}
     combined_blocked: set[str] = set()
     files_scanned: list[str] = []
+    files_with_findings: list[str] = []
 
     for path_str, result in results:
         files_scanned.append(path_str)
+        if result.findings_count > 0:
+            files_with_findings.append(path_str)
         for det, count in result.detector_counts.items():
             combined_counts[det] = combined_counts.get(det, 0) + count
         combined_blocked.update(result.blocked_by)
@@ -257,6 +262,7 @@ def _merge_results(
         blocked=bool(combined_blocked),
         blocked_by=sorted(combined_blocked),
         files_scanned=files_scanned,
+        files_with_findings=files_with_findings,
     )
 
 
@@ -488,5 +494,5 @@ def report_to_json(result: ScanResult) -> str:
     }
     if result.files_scanned:
         payload["files_scanned"] = len(result.files_scanned)
-        payload["files_with_findings"] = [f for f in result.files_scanned]
+        payload["files_with_findings"] = result.files_with_findings
     return json.dumps(payload, indent=2)

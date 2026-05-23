@@ -17,82 +17,21 @@ Commands:
 
 from __future__ import annotations
 
-import os
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
-from .config import BINARY_EXTENSIONS, SKIP_DIRECTORIES
-from .engine import _active_detectors, _scan_line
-from .policy import Policy, load_policy
+from .adapters.ide import (
+    AI_TOOLS,
+    resolve_policy,
+    scan_workspace,
+    write_ignore_file,
+)
 from .proxy.scope import AI_API_HOSTS
 from .ui.output import style
 
-# ──────────���──────────────────────────────────────��───────────────────────────
-# AI Tool Registry — add new tools here. That's it. Everything else is generic.
-# ─────────────────────────────────────────────────────────────────────────���───
-
-
-@dataclass
-class AITool:
-    """Definition of an AI tool's ignore file format."""
-
-    name: str  # human-readable name
-    ignore_file: str  # filename relative to workspace root
-    description: str  # what this tool does
-    # Some tools use different comment syntax
-    comment_prefix: str = "#"
-    # Some tools don't support ignore files — proxy-only coverage
-    has_ignore_file: bool = True
-
-
-# Every AI coding tool that indexes workspaces.
-# When a new tool launches, add ONE entry here — everything else adapts.
-AI_TOOLS: list[AITool] = [
-    AITool(
-        name="Cursor",
-        ignore_file=".cursorignore",
-        description="Cursor IDE (Claude, GPT-4, Gemini inside Cursor)",
-    ),
-    AITool(
-        name="GitHub Copilot",
-        ignore_file=".copilotignore",
-        description="GitHub Copilot in VS Code / JetBrains",
-    ),
-    AITool(
-        name="Codeium / Windsurf",
-        ignore_file=".codeiumignore",
-        description="Codeium and Windsurf AI completions",
-    ),
-    AITool(
-        name="Tabnine",
-        ignore_file=".tabnine_ignore",
-        description="Tabnine AI completions",
-    ),
-    AITool(
-        name="Amazon CodeWhisperer",
-        ignore_file=".amazonq/ignore",
-        description="Amazon Q / CodeWhisperer",
-    ),
-    AITool(
-        name="Sourcegraph Cody",
-        ignore_file=".cody/ignore",
-        description="Sourcegraph Cody AI assistant",
-    ),
-]
-
-# HTTPS proxy host registry — single source of truth in proxy/scope.py.
-# Imported at top of file, re-exported here for public API.
-
-
-# ──────────────────���──────────────────────────��───────────────────────────────
-# Terminal formatting
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────────────��───────────────────────
 # Public API
-# ────────────────────────────────────��───────────────────────────────────────���
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def protect_workspace(
@@ -101,7 +40,7 @@ def protect_workspace(
     output_dir: Path | None = None,
 ) -> int:
     """Scan workspace and write ignore files for ALL AI tools at once."""
-    policy = _load_policy(policy_path)
+    policy = resolve_policy(policy_path)
     out_dir = output_dir or workspace
 
     print(f"\n{style.bold}{'─' * 56}{style.reset}")
@@ -112,7 +51,7 @@ def protect_workspace(
     print()
 
     # Scan
-    sensitive_files = _scan_workspace(workspace, policy)
+    sensitive_files = scan_workspace(workspace, policy)
 
     if not sensitive_files:
         print(f"  {style.green}✓{style.reset}  No secrets or PII detected.")
@@ -138,9 +77,8 @@ def protect_workspace(
         if not tool.has_ignore_file:
             continue
         ignore_path = out_dir / tool.ignore_file
-        # Create parent dirs for nested ignore files (e.g. .amazonq/ignore)
         ignore_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_ignore_file(ignore_path, sensitive_files, workspace, tool)
+        write_ignore_file(ignore_path, sensitive_files, tool)
         tools_written += 1
 
     print(
@@ -167,7 +105,7 @@ def protect_watch(
     interval: int = 30,
 ) -> int:
     """Watch workspace and update ALL ignore files on change."""
-    policy = _load_policy(policy_path)
+    policy = resolve_policy(policy_path)
 
     print(f"\n{style.bold}ContextDuty — Watch Mode (all AI tools){style.reset}\n")
     print(f"  Workspace  {style.dim}{workspace}{style.reset}")
@@ -179,7 +117,7 @@ def protect_watch(
     last_state: set[str] = set()
     try:
         while True:
-            sensitive_files = _scan_workspace(workspace, policy)
+            sensitive_files = scan_workspace(workspace, policy)
             current_state = {f for f, _ in sensitive_files}
 
             if current_state != last_state:
@@ -192,7 +130,7 @@ def protect_watch(
                         continue
                     ignore_path = workspace / tool.ignore_file
                     ignore_path.parent.mkdir(parents=True, exist_ok=True)
-                    _write_ignore_file(ignore_path, sensitive_files, workspace, tool)
+                    write_ignore_file(ignore_path, sensitive_files, tool)
 
                 ts = time.strftime("%H:%M:%S")
                 if not last_state:
@@ -271,109 +209,3 @@ def _print_coverage_status(workspace: Path) -> None:
             print(
                 f"  {style.red}✗{style.reset}  {tool.name:<25} {style.dim}not configured{style.reset}"
             )
-
-
-def _load_policy(policy_path: str | None) -> Policy:
-    if policy_path:
-        p = Path(policy_path)
-        return load_policy(p if p.exists() else None)
-    default = Path(".contextduty.json")
-    return load_policy(default if default.exists() else None)
-
-
-def _scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]]]:
-    """Scan all text files, return (relative_path, detector_names) for sensitive files."""
-    detectors = _active_detectors(policy)
-    sensitive: list[tuple[str, set[str]]] = []
-    gitignore_patterns = _load_gitignore(workspace)
-
-    for root, dirs, files in os.walk(workspace):
-        # Skip hidden dirs, dependency dirs, build output
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRECTORIES]
-
-        for fname in files:
-            fpath = Path(root) / fname
-            if fpath.suffix.lower() in BINARY_EXTENSIONS:
-                continue
-
-            rel = str(fpath.relative_to(workspace))
-
-            if _matches_gitignore(rel, gitignore_patterns):
-                continue
-
-            try:
-                detector_hits: set[str] = set()
-                with fpath.open("r", encoding="utf-8", errors="replace") as f:
-                    for line in f:
-                        findings = _scan_line(line, detectors)
-                        for finding in findings:
-                            detector_hits.add(finding.detector)
-                if detector_hits:
-                    sensitive.append((rel, detector_hits))
-            except (OSError, UnicodeDecodeError):
-                continue
-
-    return sensitive
-
-
-def _write_ignore_file(
-    path: Path,
-    sensitive_files: list[tuple[str, set[str]]],
-    workspace: Path,
-    tool: AITool,
-) -> None:
-    """Write an AI tool's ignore file. Preserves manual entries after AUTO-END."""
-    cp = tool.comment_prefix
-    manual_section = ""
-    marker = f"{cp} ── AUTO-END ──"
-
-    if path.exists():
-        content = path.read_text(encoding="utf-8")
-        if marker in content:
-            manual_section = content[content.index(marker) + len(marker) :]
-
-    lines = [
-        f"{cp} ContextDuty — auto-generated {path.name}\n",
-        f"{cp} Blocks sensitive files from {tool.name} AI indexing.\n",
-        f"{cp} ANY AI tool that reads this workspace is covered.\n",
-        f"{cp}\n",
-        f"{cp} Re-generate: contextduty protect\n",
-        f"{cp} Auto-update: contextduty protect watch\n",
-        f"{cp}\n",
-        f"{cp} Manual entries below AUTO-END are preserved.\n",
-        "\n",
-        f"{cp} ── AUTO-START (do not edit between START/END) ──\n",
-    ]
-
-    for fpath, detectors in sorted(sensitive_files):
-        det_comment = ", ".join(sorted(detectors))
-        lines.append(f"{fpath}  {cp} {det_comment}\n")
-
-    lines.append(f"{marker}\n")
-
-    if manual_section.strip():
-        lines.append(manual_section)
-
-    path.write_text("".join(lines), encoding="utf-8")
-
-
-def _load_gitignore(workspace: Path) -> list[str]:
-    gi = workspace / ".gitignore"
-    if not gi.exists():
-        return []
-    patterns = []
-    for line in gi.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            patterns.append(line)
-    return patterns
-
-
-def _matches_gitignore(rel_path: str, patterns: list[str]) -> bool:
-    for pat in patterns:
-        pat_clean = pat.rstrip("/")
-        if pat_clean in rel_path or rel_path.startswith(pat_clean + "/"):
-            return True
-        if pat_clean.startswith("*") and rel_path.endswith(pat_clean[1:]):
-            return True
-    return False

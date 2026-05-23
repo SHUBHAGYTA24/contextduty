@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from contextduty.adapters.ide import (
+    AI_TOOLS,
+    scan_workspace,
+    write_ignore_file,
+)
 from contextduty.policy import load_policy
 from contextduty.protect import (
-    AI_API_HOSTS,
-    AI_TOOLS,
-    _scan_workspace,
-    _write_ignore_file,
     protect_workspace,
 )
+from contextduty.proxy.scope import AI_API_HOSTS
 
 
 def _make_workspace(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -76,7 +78,7 @@ def test_protect_skips_hidden_and_vendor_dirs(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -88,7 +90,7 @@ def test_write_ignore_file_preserves_manual(tmp_path):
         "# ── AUTO-START (do not edit between START/END) ──\nold.py  # email\n# ── AUTO-END ──\n\n# My custom rules\nsecret_dir/\n"
     )
     sensitive = [("new.py", {"aws_key"})]
-    _write_ignore_file(ignore_path, sensitive, tmp_path, tool)
+    write_ignore_file(ignore_path, sensitive, tool)
 
     content = ignore_path.read_text()
     assert "new.py" in content

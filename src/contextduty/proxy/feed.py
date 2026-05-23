@@ -14,34 +14,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-_BOLD = "\033[1m"
-_GREEN = "\033[32m"
-_RED = "\033[31m"
-_YELLOW = "\033[33m"
-_CYAN = "\033[36m"
-_DIM = "\033[2m"
-_RESET = "\033[0m"
-
-# Host → human-readable tool name
-_HOST_LABELS: dict[str, str] = {
-    "api2.cursor.sh": "Cursor",
-    "cursor.sh": "Cursor",
-    "api.anthropic.com": "Claude",
-    "api.openai.com": "OpenAI",
-    "copilot.github.com": "Copilot",
-    "api.githubcopilot.com": "Copilot",
-    "generativelanguage.googleapis.com": "Gemini",
-    "aiplatform.googleapis.com": "Vertex",
-    "openai.azure.com": "Azure",
-    "server.codeium.com": "Codeium",
-    "api.deepseek.com": "DeepSeek",
-    "api.mistral.ai": "Mistral",
-    "api.groq.com": "Groq",
-    "api.together.xyz": "Together",
-    "api.fireworks.ai": "Fireworks",
-    "api.cohere.ai": "Cohere",
-    "api.perplexity.ai": "Perplexity",
-}
+from ..ui.output import style
+from .scope import get_host_label
 
 
 @dataclass
@@ -56,10 +30,7 @@ class InterceptionEvent:
 
     @property
     def tool_name(self) -> str:
-        for pattern, name in _HOST_LABELS.items():
-            if pattern in self.host:
-                return name
-        return self.host.split(".")[0].title()
+        return get_host_label(self.host)
 
     @property
     def time_str(self) -> str:
@@ -86,13 +57,13 @@ class LiveFeed:
 
     def print_header(self) -> None:
         """Print the live feed header."""
-        print(f"\n  {_BOLD}Live Interception Feed{_RESET}")
-        print(f"  {_DIM}{'─' * 50}{_RESET}\n")
+        print(f"\n  {style.bold}Live Interception Feed{style.reset}")
+        print(f"  {style.dim}{'─' * 50}{style.reset}\n")
 
     def print_summary(self) -> None:
         """Print session summary on exit."""
-        print(f"\n  {_DIM}{'─' * 50}{_RESET}")
-        print(f"  {_BOLD}Session Summary{_RESET}")
+        print(f"\n  {style.dim}{'─' * 50}{style.reset}")
+        print(f"  {style.bold}Session Summary{style.reset}")
         print(f"    Requests intercepted: {self._total_intercepted}")
         print(f"    Findings redacted:    {self._total_findings}")
         print(f"    Requests blocked:     {self._total_blocked}")
@@ -103,26 +74,26 @@ class LiveFeed:
         host = f"{event.host:<35}"
 
         if event.action == "clean":
-            status = f"{_GREEN}clean{_RESET}"
+            status = f"{style.green}clean{style.reset}"
             detail = ""
         elif event.action == "blocked":
-            status = f"{_RED}BLOCKED{_RESET}"
+            status = f"{style.red}BLOCKED{style.reset}"
             det_str = ", ".join(f"{k}:{v}" for k, v in event.detector_counts.items())
-            detail = f"  {_DIM}[{det_str}]{_RESET}"
+            detail = f"  {style.dim}[{det_str}]{style.reset}"
         elif event.action == "redacted":
-            status = f"{_YELLOW}{event.findings_count} redacted{_RESET}"
+            status = f"{style.yellow}{event.findings_count} redacted{style.reset}"
             det_str = ", ".join(sorted(event.detector_counts.keys()))
-            detail = f"  {_DIM}[{det_str}]{_RESET}"
+            detail = f"  {style.dim}[{det_str}]{style.reset}"
         elif event.action == "warn":
-            status = f"{_CYAN}warn ({event.findings_count}){_RESET}"
+            status = f"{style.cyan}warn ({event.findings_count}){style.reset}"
             det_str = ", ".join(sorted(event.detector_counts.keys()))
-            detail = f"  {_DIM}[{det_str}]{_RESET}"
+            detail = f"  {style.dim}[{det_str}]{style.reset}"
         else:
             status = event.action
             detail = ""
 
         print(
-            f"  {_DIM}{event.time_str}{_RESET}  {tool} → {host} {status}{detail}",
+            f"  {style.dim}{event.time_str}{style.reset}  {tool} → {host} {status}{detail}",
             flush=True,
         )
 

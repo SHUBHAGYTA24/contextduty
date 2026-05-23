@@ -9,13 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
-_RESET = "\033[0m"
-_BOLD = "\033[1m"
-_RED = "\033[31m"
-_GREEN = "\033[32m"
-_YELLOW = "\033[33m"
-_CYAN = "\033[36m"
-_DIM = "\033[2m"
+from .ui.output import style
 
 
 def _print(msg: str = "") -> None:
@@ -23,15 +17,15 @@ def _print(msg: str = "") -> None:
 
 
 def _step(msg: str) -> None:
-    print(f"\n{_BOLD}{_CYAN}▶ {msg}{_RESET}", flush=True)
+    print(f"\n{style.bold}{style.cyan}▶ {msg}{style.reset}", flush=True)
 
 
 def _ok(msg: str) -> None:
-    print(f"{_GREEN}✓ {msg}{_RESET}", flush=True)
+    print(f"{style.green}✓ {msg}{style.reset}", flush=True)
 
 
 def _warn(msg: str) -> None:
-    print(f"{_YELLOW}⚠ {msg}{_RESET}", flush=True)
+    print(f"{style.yellow}⚠ {msg}{style.reset}", flush=True)
 
 
 def _pause(seconds: float = 0.8) -> None:
@@ -71,10 +65,10 @@ _FAKE_FIXTURE = """\
 
 def run_demo() -> None:
     _print()
-    _print(f"{_BOLD}{'─' * 60}{_RESET}")
-    _print(f"{_BOLD}  ContextDuty — Interactive Demo{_RESET}")
-    _print(f"{_DIM}  Shows how secrets are caught before they reach an AI prompt{_RESET}")
-    _print(f"{_BOLD}{'─' * 60}{_RESET}")
+    _print(f"{style.bold}{'─' * 60}{style.reset}")
+    _print(f"{style.bold}  ContextDuty — Interactive Demo{style.reset}")
+    _print(f"{style.dim}  Shows how secrets are caught before they reach an AI prompt{style.reset}")
+    _print(f"{style.bold}{'─' * 60}{style.reset}")
 
     tmp = Path(tempfile.mkdtemp(prefix="contextduty-demo-"))
     try:
@@ -82,7 +76,7 @@ def run_demo() -> None:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         _print()
-        _print(f"{_DIM}Demo directory cleaned up.{_RESET}")
+        _print(f"{style.dim}Demo directory cleaned up.{style.reset}")
         _print()
 
 
@@ -95,16 +89,16 @@ def _run_demo_in(tmp: Path) -> None:
     config_file = tmp / "config.py"
     fake_config = _fake_config()
     config_file.write_text(fake_config)
-    _print(f"  {_DIM}$ cat config.py{_RESET}")
+    _print(f"  {style.dim}$ cat config.py{style.reset}")
     _pause(0.4)
     for line in fake_config.strip().splitlines():
-        _print(f"  {_DIM}{line}{_RESET}")
+        _print(f"  {style.dim}{line}{style.reset}")
         time.sleep(0.03)
 
     # ── Scene 2: scan the file directly ──────────────────────────────────────
     _print()
     _step("Scene 2 — Scanning config.py")
-    _print(f"  {_DIM}$ contextduty scan config.py{_RESET}")
+    _print(f"  {style.dim}$ contextduty scan config.py{style.reset}")
     _pause(0.5)
 
     from .engine import scan_file
@@ -121,11 +115,11 @@ def _run_demo_in(tmp: Path) -> None:
     _print()
     for line in json.dumps(report, indent=2).splitlines():
         color = (
-            _RED
+            style.red
             if any(k in line for k in ("findings", "true", "aws", "openai", "email", "stripe"))
-            else _RESET
+            else style.reset
         )
-        _print(f"  {color}{line}{_RESET}")
+        _print(f"  {color}{line}{style.reset}")
         time.sleep(0.02)
 
     _print()
@@ -136,7 +130,9 @@ def _run_demo_in(tmp: Path) -> None:
     # ── Scene 3: redact it ───────────────────────────────────────────────────
     _print()
     _step("Scene 3 — Redacting config.py (safe to pass to AI)")
-    _print(f"  {_DIM}$ contextduty redact --in config.py --out config.redacted.py{_RESET}")
+    _print(
+        f"  {style.dim}$ contextduty redact --in config.py --out config.redacted.py{style.reset}"
+    )
     _pause(0.5)
 
     from .engine import redact_file
@@ -147,8 +143,8 @@ def _run_demo_in(tmp: Path) -> None:
     _print()
     for line in redacted_file.read_text().strip().splitlines():
         is_masked = "<" in line and "_" in line
-        color = _GREEN if is_masked else _DIM
-        _print(f"  {color}{line}{_RESET}")
+        color = style.green if is_masked else style.dim
+        _print(f"  {color}{line}{style.reset}")
         time.sleep(0.03)
 
     _print()
@@ -182,7 +178,7 @@ def _run_demo_in(tmp: Path) -> None:
         ["git", "-C", str(tmp), "add", "config.py", ".contextduty.json"], capture_output=True
     )
 
-    _print(f"  {_DIM}$ git add config.py && git commit -m 'add config'{_RESET}")
+    _print(f"  {style.dim}$ git add config.py && git commit -m 'add config'{style.reset}")
     _pause(0.8)
 
     commit_result = subprocess.run(
@@ -195,11 +191,11 @@ def _run_demo_in(tmp: Path) -> None:
     _print()
     for line in combined.splitlines():
         if "BLOCKED" in line or "blocked" in line.lower() or "ContextDuty" in line:
-            _print(f"  {_RED}{_BOLD}{line}{_RESET}")
+            _print(f"  {style.red}{style.bold}{line}{style.reset}")
         elif "╔" in line or "║" in line or "╚" in line:
-            _print(f"  {_RED}{line}{_RESET}")
+            _print(f"  {style.red}{line}{style.reset}")
         elif line.strip():
-            _print(f"  {_DIM}{line}{_RESET}")
+            _print(f"  {style.dim}{line}{style.reset}")
 
     if commit_result.returncode != 0:
         _print()
@@ -207,7 +203,9 @@ def _run_demo_in(tmp: Path) -> None:
     else:
         _print()
         _warn("Hook did not fire (git hook requires contextduty in PATH during commit)")
-        _print(f"  {_DIM}Run: contextduty install-hooks  in your own repo to activate{_RESET}")
+        _print(
+            f"  {style.dim}Run: contextduty install-hooks  in your own repo to activate{style.reset}"
+        )
 
     # ── Scene 5: scan a directory (customer fixture file) ────────────────────
     _print()
@@ -219,7 +217,7 @@ def _run_demo_in(tmp: Path) -> None:
     fixture_file = fixtures_dir / "customers.json"
     fixture_file.write_text(_FAKE_FIXTURE)
 
-    _print(f"  {_DIM}$ contextduty scan tests/{_RESET}")
+    _print(f"  {style.dim}$ contextduty scan tests/{style.reset}")
     _pause(0.5)
 
     from .engine import scan_dir
@@ -235,11 +233,11 @@ def _run_demo_in(tmp: Path) -> None:
     _print()
     for line in json.dumps(dir_report, indent=2).splitlines():
         color = (
-            _RED
+            style.red
             if any(k in line for k in ("findings", "email", "phone", "ssn", "card"))
-            else _RESET
+            else style.reset
         )
-        _print(f"  {color}{line}{_RESET}")
+        _print(f"  {color}{line}{style.reset}")
         time.sleep(0.02)
 
     _print()
@@ -249,32 +247,34 @@ def _run_demo_in(tmp: Path) -> None:
 
     # ── Summary ───────────────────────────────────────────────────────────────
     _print()
-    _print(f"{_BOLD}{'─' * 60}{_RESET}")
-    _print(f"{_BOLD}  What just happened{_RESET}")
+    _print(f"{style.bold}{'─' * 60}{style.reset}")
+    _print(f"{style.bold}  What just happened{style.reset}")
     _print(f"{'─' * 60}")
     _print(
-        f"  {_GREEN}✓{_RESET}  Scanned config.py — found {result.findings_count} secrets across {len(result.detector_counts)} detectors"
+        f"  {style.green}✓{style.reset}  Scanned config.py — found {result.findings_count} secrets across {len(result.detector_counts)} detectors"
     )
-    _print(f"  {_GREEN}✓{_RESET}  Redacted all values — safe masked output ready for AI")
-    _print(f"  {_GREEN}✓{_RESET}  Pre-commit hook blocked commit containing AWS + OpenAI keys")
+    _print(f"  {style.green}✓{style.reset}  Redacted all values — safe masked output ready for AI")
     _print(
-        f"  {_GREEN}✓{_RESET}  Directory scan found PII in test fixtures before Cursor could index them"
+        f"  {style.green}✓{style.reset}  Pre-commit hook blocked commit containing AWS + OpenAI keys"
+    )
+    _print(
+        f"  {style.green}✓{style.reset}  Directory scan found PII in test fixtures before Cursor could index them"
     )
     _print(f"{'─' * 60}")
     _print()
-    _print(f"{_BOLD}  Next steps{_RESET}")
+    _print(f"{style.bold}  Next steps{style.reset}")
     _print()
     _print("  Install the hook in your repo:")
-    _print(f"    {_CYAN}contextduty install-hooks{_RESET}")
+    _print(f"    {style.cyan}contextduty install-hooks{style.reset}")
     _print()
     _print("  Use with Claude / Cursor via MCP — add to ~/.cursor/mcp.json:")
     _print(
-        f'    {_CYAN}{{"mcpServers": {{"contextduty": {{"command": "contextduty-mcp"}}}}}}{_RESET}'
+        f'    {style.cyan}{{"mcpServers": {{"contextduty": {{"command": "contextduty-mcp"}}}}}}{style.reset}'
     )
     _print()
     _print("  View the audit dashboard:")
-    _print(f"    {_CYAN}contextduty dashboard --demo{_RESET}")
+    _print(f"    {style.cyan}contextduty dashboard --demo{style.reset}")
     _print()
-    _print(f"  Docs: {_CYAN}https://github.com/SHUBHAGYTA24/contextduty{_RESET}")
-    _print(f"{_BOLD}{'─' * 60}{_RESET}")
+    _print(f"  Docs: {style.cyan}https://github.com/SHUBHAGYTA24/contextduty{style.reset}")
+    _print(f"{style.bold}{'─' * 60}{style.reset}")
     _print()

@@ -11,8 +11,13 @@ CLI output and terminal formatting live in cli/output.py.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
+
+from ..config import BINARY_EXTENSIONS, SKIP_DIRECTORIES
+from ..engine import _active_detectors, _scan_line
+from ..policy import Policy, load_policy
 
 
 @dataclass(frozen=True)
@@ -103,6 +108,73 @@ def write_ignore_file(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(lines), encoding="utf-8")
+
+
+def resolve_policy(policy_path: str | None) -> Policy:
+    """Load a policy from the given path, falling back to defaults."""
+    if policy_path:
+        p = Path(policy_path)
+        return load_policy(p if p.exists() else None)
+    default = Path(".contextduty.json")
+    return load_policy(default if default.exists() else None)
+
+
+def load_gitignore(workspace: Path) -> list[str]:
+    """Load .gitignore patterns (simple glob matching only)."""
+    gi = workspace / ".gitignore"
+    if not gi.exists():
+        return []
+    patterns = []
+    for line in gi.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            patterns.append(line)
+    return patterns
+
+
+def matches_gitignore(rel_path: str, patterns: list[str]) -> bool:
+    """Simple gitignore matching — handles directory prefixes and glob suffixes."""
+    for pat in patterns:
+        pat_clean = pat.rstrip("/")
+        if pat_clean in rel_path or rel_path.startswith(pat_clean + "/"):
+            return True
+        if pat_clean.startswith("*") and rel_path.endswith(pat_clean[1:]):
+            return True
+    return False
+
+
+def scan_workspace(workspace: Path, policy: Policy) -> list[tuple[str, set[str]]]:
+    """Scan all text files, return (relative_path, detector_names) for sensitive files."""
+    detectors = _active_detectors(policy)
+    sensitive: list[tuple[str, set[str]]] = []
+    gitignore_patterns = load_gitignore(workspace)
+
+    for root, dirs, files in os.walk(workspace):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRECTORIES]
+
+        for fname in files:
+            fpath = Path(root) / fname
+            if fpath.suffix.lower() in BINARY_EXTENSIONS:
+                continue
+
+            rel = str(fpath.relative_to(workspace))
+
+            if matches_gitignore(rel, gitignore_patterns):
+                continue
+
+            try:
+                detector_hits: set[str] = set()
+                with fpath.open("r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        findings = _scan_line(line, detectors)
+                        for finding in findings:
+                            detector_hits.add(finding.detector)
+                if detector_hits:
+                    sensitive.append((rel, detector_hits))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+    return sensitive
 
 
 def write_all_ignore_files(

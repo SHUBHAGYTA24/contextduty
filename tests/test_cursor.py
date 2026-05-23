@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from contextduty.adapters.ide import (
+    matches_gitignore,
+    scan_workspace,
+    write_ignore_file,
+)
 from contextduty.cursor import (
-    _matches_gitignore,
-    _scan_workspace,
-    _write_cursorignore,
+    _CURSOR_TOOL,
     cursor_setup,
 )
 from contextduty.policy import load_policy
@@ -32,7 +35,7 @@ def test_scan_workspace_finds_aws_key(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert len(results) == 1
     assert results[0][0] == "config.py"
     assert "aws_key" in results[0][1]
@@ -47,7 +50,7 @@ def test_scan_workspace_skips_clean_files(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -61,7 +64,7 @@ def test_scan_workspace_skips_hidden_dirs(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -75,7 +78,7 @@ def test_scan_workspace_skips_node_modules(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -85,7 +88,7 @@ def test_write_cursorignore_creates_file(tmp_path):
         ("secrets/db.env", {"database_url", "email"}),
     ]
     out = tmp_path / ".cursorignore"
-    _write_cursorignore(out, sensitive, tmp_path)
+    write_ignore_file(out, sensitive, _CURSOR_TOOL)
 
     content = out.read_text()
     assert "config.py" in content
@@ -102,7 +105,7 @@ def test_write_cursorignore_preserves_manual_entries(tmp_path):
     )
 
     sensitive = [("new.py", {"email"})]
-    _write_cursorignore(out, sensitive, tmp_path)
+    write_ignore_file(out, sensitive, _CURSOR_TOOL)
 
     content = out.read_text()
     assert "new.py" in content
@@ -112,10 +115,10 @@ def test_write_cursorignore_preserves_manual_entries(tmp_path):
 
 def test_matches_gitignore_basic():
     patterns = ["node_modules", "*.pyc", "dist/"]
-    assert _matches_gitignore("node_modules/pkg/index.js", patterns)
-    assert _matches_gitignore("src/app.pyc", patterns)
-    assert _matches_gitignore("dist/bundle.js", patterns)
-    assert not _matches_gitignore("src/main.py", patterns)
+    assert matches_gitignore("node_modules/pkg/index.js", patterns)
+    assert matches_gitignore("src/app.pyc", patterns)
+    assert matches_gitignore("dist/bundle.js", patterns)
+    assert not matches_gitignore("src/main.py", patterns)
 
 
 def test_cursor_setup_clean_workspace(tmp_path, capsys):
@@ -158,7 +161,7 @@ def test_scan_workspace_detects_multiple_types(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert len(results) == 1
     assert "aws_key" in results[0][1]
     assert "email" in results[0][1]

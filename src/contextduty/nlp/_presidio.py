@@ -59,10 +59,12 @@ def get_analyzer() -> Any:
     from presidio_analyzer import AnalyzerEngine
     from presidio_analyzer.nlp_engine import NlpEngineProvider
 
-    provider = NlpEngineProvider(nlp_configuration={
-        "nlp_engine_name": "spacy",
-        "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
-    })
+    provider = NlpEngineProvider(
+        nlp_configuration={
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}],
+        }
+    )
     nlp_engine = provider.create_engine()
     _analyzer = AnalyzerEngine(nlp_engine=nlp_engine)
     return _analyzer
@@ -102,10 +104,8 @@ def analyze_text(
     result.entities_found = len(results)
 
     for r in results:
-        entity_text = text[r.start:r.end]
-        detector_name = PRESIDIO_TO_DETECTOR.get(
-            r.entity_type, f"nlp_{r.entity_type.lower()}"
-        )
+        entity_text = text[r.start : r.end]
+        detector_name = PRESIDIO_TO_DETECTOR.get(r.entity_type, f"nlp_{r.entity_type.lower()}")
 
         if r.score < min_confidence:
             result.entities_suppressed += 1
@@ -150,9 +150,7 @@ def analyze_segments(
     for seg_text, _seg_type in segments:
         if not seg_text.strip():
             continue
-        partial = analyze_text(
-            seg_text, min_confidence=min_confidence, language=language
-        )
+        partial = analyze_text(seg_text, min_confidence=min_confidence, language=language)
         combined.findings.extend(partial.findings)
         combined.entities_found += partial.entities_found
         combined.entities_suppressed += partial.entities_suppressed

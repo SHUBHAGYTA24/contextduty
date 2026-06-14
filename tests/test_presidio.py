@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from contextduty.nlp._types import NLPFinding, NLPScanResult
+from contextduty.nlp._types import NLPScanResult
 
 # ---------------------------------------------------------------------------
 # Check if Presidio is installed

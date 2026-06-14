@@ -138,7 +138,6 @@ def _scan_spacy(
 ) -> NLPScanResult:
     """Run NER using the spaCy backend."""
     from ._model import get_model
-    from ._scoring import PII_ENTITY_LABELS, compute_confidence
 
     nlp = get_model(model_name)
     result = NLPScanResult(segments_scanned=len(all_segments))

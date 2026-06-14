@@ -7,12 +7,22 @@ import pytest
 
 from contextduty.nlp import (
     extract_text_segments,
+    reset_backend,
     scan_file_nlp,
     scan_text_nlp,
+    set_backend,
 )
 
 # Skip all tests if spaCy is not installed
 spacy = pytest.importorskip("spacy")
+
+
+@pytest.fixture(autouse=True)
+def _force_spacy_backend():
+    """These tests were written for the spaCy backend."""
+    set_backend("spacy")
+    yield
+    reset_backend()
 
 
 # ---------------------------------------------------------------------------

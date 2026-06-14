@@ -48,6 +48,12 @@ def _parser() -> argparse.ArgumentParser:
         default=0.5,
         help="Minimum confidence threshold for NLP findings (0.0-1.0, default: 0.5).",
     )
+    scan_parser.add_argument(
+        "--nlp-backend",
+        choices=["presidio", "spacy", "auto"],
+        default="auto",
+        help="NLP backend: presidio (recommended), spacy, or auto-detect (default: auto).",
+    )
 
     # ── redact ────────────────────────────────────────────────────────────────
     redact_parser = subparsers.add_parser("redact", help="Redact risky data from an input file.")
@@ -257,13 +263,18 @@ def main() -> None:  # noqa: C901
         # NLP scan (optional)
         if getattr(args, "nlp", False):
             try:
-                from .nlp import scan_file_nlp
+                from .nlp import get_backend, scan_file_nlp, set_backend
 
+                nlp_backend_arg = getattr(args, "nlp_backend", "auto")
+                if nlp_backend_arg != "auto":
+                    set_backend(nlp_backend_arg)
+
+                active_backend = get_backend()
                 nlp_result = scan_file_nlp(
                     str(target), min_confidence=getattr(args, "nlp_confidence", 0.5)
                 )
                 if nlp_result.findings:
-                    print("\n🧠 NLP-detected PII:")
+                    print(f"\n🧠 NLP-detected PII (backend: {active_backend}):")
                     for f in nlp_result.findings:
                         print(
                             f"  • {f.detector_name}: {f.entity_text} "
@@ -271,13 +282,15 @@ def main() -> None:  # noqa: C901
                         )
                     print(
                         f"\n  {len(nlp_result.findings)} NLP finding(s), "
-                        f"{nlp_result.entities_suppressed} suppressed by context scoring"
+                        f"{nlp_result.entities_suppressed} suppressed"
                     )
                 else:
-                    print("\n🧠 NLP: no PII detected")
+                    print(f"\n🧠 NLP ({active_backend}): no PII detected")
             except ImportError:
                 print(
-                    "\n⚠️  NLP not available. Install with: pip install contextduty[nlp]",
+                    "\n⚠️  NLP not available. Install with:\n"
+                    "  pip install contextduty[presidio]   # recommended\n"
+                    "  pip install contextduty[nlp]        # spaCy fallback",
                     file=sys.stderr,
                 )
         if args.report:

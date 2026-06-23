@@ -119,32 +119,27 @@ def _apply_findings(
     # First pass: decide what to mask (longest match wins for overlaps).
     # Sort longest-first so a long match takes priority over shorter overlapping ones.
     replacements: list[tuple[int, int, str]] = []  # (start, end, mask)
-    claimed: set[str] = set()  # deduplicate identical values
+    claimed_ranges: set[tuple[int, int]] = set()  # deduplicate by offset range, not by value
 
     for finding in sorted(findings, key=lambda f: len(f.value), reverse=True):
         if _is_allowed(finding.value, finding.detector, policy):
-            continue
-        if finding.value in claimed:
-            # Still count it, but don't add another replacement.
-            detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
-            mode = _effective_mode(policy, finding.detector)
-            if mode == "block":
-                blocked_detectors.add(finding.detector)
             continue
 
         detector_counts[finding.detector] = detector_counts.get(finding.detector, 0) + 1
         mode = _effective_mode(policy, finding.detector)
 
+        span = (finding.start, finding.end)
         if mode == "block":
             blocked_detectors.add(finding.detector)
-            if redact_blocked:
+            if redact_blocked and span not in claimed_ranges:
                 mask = stable_mask(finding.detector, finding.value)
                 replacements.append((finding.start, finding.end, mask))
-                claimed.add(finding.value)
+                claimed_ranges.add(span)
         elif mode == "redact":
-            mask = stable_mask(finding.detector, finding.value)
-            replacements.append((finding.start, finding.end, mask))
-            claimed.add(finding.value)
+            if span not in claimed_ranges:
+                mask = stable_mask(finding.detector, finding.value)
+                replacements.append((finding.start, finding.end, mask))
+                claimed_ranges.add(span)
         # mode == "warn": count it, don't mask, don't block
 
     if not replacements:
@@ -293,7 +288,21 @@ def scan_dir(
         raise ValueError(f"{root} is not a file or directory")
 
     glob = root.rglob("*") if recursive else root.glob("*")
-    paths = [p for p in sorted(glob) if p.is_file() and p.suffix.lower() not in _BINARY_EXTENSIONS]
+    _seen_real: set[int] = set()
+    _candidate_paths: list[Path] = []
+    for p in sorted(glob):
+        if not p.is_file():
+            continue
+        try:
+            ino = p.stat().st_ino
+        except OSError:
+            continue
+        if ino in _seen_real:
+            continue
+        _seen_real.add(ino)
+        if p.suffix.lower() not in _BINARY_EXTENSIONS:
+            _candidate_paths.append(p)
+    paths = _candidate_paths
 
     if not paths:
         return ScanResult(findings_count=0, detector_counts={}, blocked=False, blocked_by=[])
@@ -462,7 +471,9 @@ def scan_text(text: str, policy: Policy) -> ScanTextResult:
 
     for line in text.splitlines(keepends=True):
         findings = _scan_line(line, detectors)
-        updated = _apply_findings(line, findings, policy, detector_counts, blocked_detectors)
+        updated = _apply_findings(
+            line, findings, policy, detector_counts, blocked_detectors, redact_blocked=True
+        )
         redacted_lines.append(updated)
 
     findings_count = sum(detector_counts.values())
@@ -488,5 +499,4 @@ def report_to_json(result: ScanResult) -> str:
     }
     if result.files_scanned:
         payload["files_scanned"] = len(result.files_scanned)
-        payload["files_with_findings"] = [f for f in result.files_scanned]
     return json.dumps(payload, indent=2)

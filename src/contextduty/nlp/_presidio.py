@@ -41,11 +41,12 @@ PRESIDIO_TO_DETECTOR: dict[str, str] = {
 
 
 def is_available() -> bool:
-    """Return True if Presidio is installed and importable."""
+    """Return True if Presidio is installed and the required spaCy model is present."""
     try:
+        import spacy
         from presidio_analyzer import AnalyzerEngine  # noqa: F401
 
-        return True
+        return spacy.util.is_package("en_core_web_sm")
     except ImportError:
         return False
 
@@ -106,10 +107,6 @@ def analyze_text(
     for r in results:
         entity_text = text[r.start : r.end]
         detector_name = PRESIDIO_TO_DETECTOR.get(r.entity_type, f"nlp_{r.entity_type.lower()}")
-
-        if r.score < min_confidence:
-            result.entities_suppressed += 1
-            continue
 
         ctx_start = max(0, r.start - 50)
         ctx_end = min(len(text), r.end + 50)

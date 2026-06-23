@@ -19,7 +19,6 @@ the hooks definition at .pre-commit-hooks.yaml.
 
 from __future__ import annotations
 
-import shlex
 import stat
 import sys
 from pathlib import Path
@@ -172,9 +171,13 @@ def install_git_hook(
                 "ContextDuty. Remove it manually or append ContextDuty to it, then re-run."
             )
 
+    def _bash_dq_escape(s: str) -> str:
+        """Escape a value for embedding inside a bash double-quoted string."""
+        return s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+
     hook_content = _HOOK_TEMPLATE.format(
-        policy=shlex.quote(str(policy_path)),
-        audit_log=shlex.quote(str(audit_log)) if audit_log else "",
+        policy=_bash_dq_escape(str(policy_path)),
+        audit_log=_bash_dq_escape(str(audit_log)) if audit_log else "",
     )
 
     hook_path.write_text(hook_content, encoding="utf-8")

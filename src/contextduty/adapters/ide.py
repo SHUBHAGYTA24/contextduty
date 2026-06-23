@@ -6,7 +6,7 @@ future-proof. When a new AI coding assistant launches:
     2. That's it. contextduty protect handles the rest.
 
 This module contains ONLY the data model and file generation logic.
-CLI output and terminal formatting live in cli/output.py.
+CLI output and terminal formatting live in ui/output.py.
 """
 
 from __future__ import annotations
@@ -69,7 +69,16 @@ def write_ignore_file(
     sensitive_files: list[tuple[str, set[str]]],
     tool: AITool,
 ) -> None:
-    """Write an AI tool's ignore file. Preserves manual entries after AUTO-END marker."""
+    """Write an AI tool's ignore file.
+
+    Args:
+        path: Destination path (e.g. ``workspace / ".cursorignore"``).
+        sensitive_files: List of ``(relative_path, detector_names)`` tuples.
+        tool: The :class:`AITool` definition that controls filename and comment syntax.
+
+    Any lines after the ``AUTO-END`` marker in an existing file are preserved
+    so users can add their own manual entries without them being overwritten.
+    """
     cp = tool.comment_prefix
     marker = f"{cp} ── AUTO-END ──"
     manual_section = ""

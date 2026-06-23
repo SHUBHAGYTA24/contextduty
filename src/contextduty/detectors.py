@@ -9,6 +9,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Detector:
+    """A named regex pattern used by the scan engine.
+
+    *name* identifies the finding type (e.g. ``"aws_key"``).
+    *pattern* is a compiled regex applied line-by-line to source text.
+    """
+
     name: str
     pattern: re.Pattern[str]
 
@@ -161,5 +167,11 @@ DETECTORS: list[Detector] = [
 
 
 def stable_mask(detector_name: str, value: str) -> str:
+    """Return a deterministic redaction token for *value*.
+
+    The same value always produces the same token across runs and machines
+    (SHA-256, first 10 hex digits), enabling consistent de-duplication in diff
+    output and audit trails.  Example: ``<AWS_KEY_3d4f9c1a2b>``.
+    """
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:10]
     return f"<{detector_name.upper()}_{digest}>"

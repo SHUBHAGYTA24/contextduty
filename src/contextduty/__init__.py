@@ -5,4 +5,4 @@ try:
 
     __version__ = version("contextduty")
 except PackageNotFoundError:
-    __version__ = "0.2.2"  # fallback for editable installs
+    __version__ = "0.0.0+unknown"  # fallback for editable installs

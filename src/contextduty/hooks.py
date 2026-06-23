@@ -128,7 +128,7 @@ _PRE_COMMIT_HOOKS_YAML = """\
 #
 #   repos:
 #     - repo: https://github.com/SHUBHAGYTA24/contextduty
-#       rev: v0.1.0
+#       rev: v0.2.6  # replace with the latest tag
 #       hooks:
 #         - id: contextduty-scan
 #

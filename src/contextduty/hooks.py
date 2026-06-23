@@ -23,6 +23,13 @@ import stat
 import sys
 from pathlib import Path
 
+__all__ = [
+    "install_git_hook",
+    "uninstall_git_hook",
+    "write_pre_commit_hooks_yaml",
+    "pre_commit_entrypoint",
+]
+
 # The shell script written to .git/hooks/pre-commit
 _HOOK_TEMPLATE = """\
 #!/usr/bin/env bash

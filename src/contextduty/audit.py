@@ -23,6 +23,8 @@ from pathlib import Path
 
 from .engine import ScanResult
 
+__all__ = ["write_audit_entry", "generate_report"]
+
 
 def _identity() -> dict[str, str]:
     """Collect non-sensitive identity context for the audit entry."""

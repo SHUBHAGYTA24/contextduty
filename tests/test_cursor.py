@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from contextduty.cursor import (
-    _matches_gitignore,
-    _scan_workspace,
-    _write_cursorignore,
-    cursor_setup,
-)
+from contextduty._workspace import matches_gitignore, scan_workspace
+from contextduty.adapters.ide import AI_TOOLS, write_ignore_file
+from contextduty.cursor import cursor_setup
 from contextduty.policy import load_policy
+
+_CURSOR_TOOL = next(t for t in AI_TOOLS if t.name == "Cursor")
 
 
 def _make_workspace(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -32,7 +31,7 @@ def test_scan_workspace_finds_aws_key(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert len(results) == 1
     assert results[0][0] == "config.py"
     assert "aws_key" in results[0][1]
@@ -47,7 +46,7 @@ def test_scan_workspace_skips_clean_files(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -61,7 +60,7 @@ def test_scan_workspace_skips_hidden_dirs(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -75,7 +74,7 @@ def test_scan_workspace_skips_node_modules(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert results == []
 
 
@@ -85,7 +84,7 @@ def test_write_cursorignore_creates_file(tmp_path):
         ("secrets/db.env", {"database_url", "email"}),
     ]
     out = tmp_path / ".cursorignore"
-    _write_cursorignore(out, sensitive, tmp_path)
+    write_ignore_file(out, sensitive, _CURSOR_TOOL)
 
     content = out.read_text()
     assert "config.py" in content
@@ -95,36 +94,30 @@ def test_write_cursorignore_creates_file(tmp_path):
 
 
 def test_write_cursorignore_preserves_manual_entries(tmp_path):
-    # Pre-existing .cursorignore with manual entries
     out = tmp_path / ".cursorignore"
     out.write_text(
         "# ── AUTO-START (do not edit between START/END) ──\nold.py  # aws_key\n# ── AUTO-END ──\n\n# Manual\nmy_custom_ignore.txt\n"
     )
 
     sensitive = [("new.py", {"email"})]
-    _write_cursorignore(out, sensitive, tmp_path)
+    write_ignore_file(out, sensitive, _CURSOR_TOOL)
 
     content = out.read_text()
     assert "new.py" in content
-    assert "old.py" not in content  # replaced by new scan
+    assert "old.py" not in content
     assert "my_custom_ignore.txt" in content  # manual preserved
 
 
 def test_matches_gitignore_basic():
     patterns = ["node_modules", "*.pyc", "dist/"]
-    assert _matches_gitignore("node_modules/pkg/index.js", patterns)
-    assert _matches_gitignore("src/app.pyc", patterns)
-    assert _matches_gitignore("dist/bundle.js", patterns)
-    assert not _matches_gitignore("src/main.py", patterns)
+    assert matches_gitignore("node_modules/pkg/index.js", patterns)
+    assert matches_gitignore("src/app.pyc", patterns)
+    assert matches_gitignore("dist/bundle.js", patterns)
+    assert not matches_gitignore("src/main.py", patterns)
 
 
 def test_cursor_setup_clean_workspace(tmp_path, capsys):
-    ws = _make_workspace(
-        tmp_path,
-        {
-            "app.py": "print('hello')",
-        },
-    )
+    ws = _make_workspace(tmp_path, {"app.py": "print('hello')"})
     rc = cursor_setup(ws)
     assert rc == 0
     captured = capsys.readouterr()
@@ -158,7 +151,7 @@ def test_scan_workspace_detects_multiple_types(tmp_path):
         },
     )
     policy = load_policy(None)
-    results = _scan_workspace(ws, policy)
+    results = scan_workspace(ws, policy)
     assert len(results) == 1
     assert "aws_key" in results[0][1]
     assert "email" in results[0][1]

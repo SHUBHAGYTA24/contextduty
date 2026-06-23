@@ -14,6 +14,17 @@ from .config import BINARY_EXTENSIONS
 from .detectors import DETECTORS, Detector, stable_mask
 from .policy import Policy
 
+__all__ = [
+    "Finding",
+    "ScanResult",
+    "ScanTextResult",
+    "scan_file",
+    "scan_dir",
+    "scan_text",
+    "redact_file",
+    "report_to_json",
+]
+
 # Backward-compat alias — old imports still work
 _BINARY_EXTENSIONS = BINARY_EXTENSIONS
 

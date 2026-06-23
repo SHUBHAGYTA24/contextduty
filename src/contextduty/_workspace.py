@@ -56,11 +56,7 @@ def scan_workspace(
     sensitive: list[tuple[str, set[str]]] = []
 
     for root, dirs, files in os.walk(workspace):
-        dirs[:] = [
-            d
-            for d in dirs
-            if not d.startswith(".") and d not in SKIP_DIRECTORIES
-        ]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in SKIP_DIRECTORIES]
 
         for fname in files:
             fpath = Path(root) / fname

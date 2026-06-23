@@ -174,9 +174,7 @@ def _print_coverage_status(workspace: Path) -> None:
         if ignore_path.exists():
             content = ignore_path.read_text(encoding="utf-8")
             entries = [
-                ln
-                for ln in content.splitlines()
-                if ln.strip() and not ln.strip().startswith("#")
+                ln for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")
             ]
             print(
                 f"  {style.green}✓{style.reset}  {tool.name:<25} "

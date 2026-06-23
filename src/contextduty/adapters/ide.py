@@ -14,6 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+__all__ = [
+    "AITool",
+    "AI_TOOLS",
+    "write_ignore_file",
+    "write_all_ignore_files",
+]
+
 
 @dataclass(frozen=True)
 class AITool:

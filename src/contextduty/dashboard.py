@@ -824,6 +824,12 @@ function renderUserBars(users) {
     </div>`).join('');
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function renderActivity(rows) {
   const tbody = document.getElementById('activity-body');
   document.getElementById('activity-count').textContent =
@@ -841,7 +847,8 @@ function renderActivity(rows) {
     const tsStr = ts.toLocaleString(undefined, {month:'short',day:'numeric',
       hour:'2-digit',minute:'2-digit'});
     const target = e.target || '—';
-    const short = target.length > 35 ? '…'+target.slice(-34) : target;
+    const targetEsc = escapeHtml(target);
+    const short = targetEsc.length > 35 ? '…'+targetEsc.slice(-34) : targetEsc;
     const opBadge = e.operation === 'redact'
       ? `<span class="badge badge-purple">redact</span>`
       : e.operation === 'pre-commit'
@@ -851,7 +858,7 @@ function renderActivity(rows) {
       ? `<span style="color:var(--yellow);font-weight:600">${e.findings_count}</span>`
       : `<span style="color:var(--muted)">0</span>`;
     const chips = Object.keys(e.detector_counts||{}).slice(0,4)
-      .map(d=>`<span class="chip">${d}</span>`).join('');
+      .map(d=>`<span class="chip">${escapeHtml(d)}</span>`).join('');
     const more = Object.keys(e.detector_counts||{}).length > 4
       ? `<span class="chip" style="color:var(--muted)">+${Object.keys(e.detector_counts).length-4}</span>` : '';
     const status = e.blocked
@@ -864,15 +871,15 @@ function renderActivity(rows) {
       ? `<span class="badge badge-purple">mcp</span>`
       : tool === 'pre-commit'
       ? `<span class="badge badge-blue">hook</span>`
-      : `<span style="color:var(--muted)">${tool}</span>`;
+      : `<span style="color:var(--muted)">${escapeHtml(tool)}</span>`;
     return `<tr>
       <td style="color:var(--muted);white-space:nowrap">${tsStr}</td>
-      <td title="${target}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${short}</td>
+      <td title="${targetEsc}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${short}</td>
       <td>${opBadge}</td>
       <td>${findBadge}</td>
       <td>${chips}${more}</td>
       <td>${status}</td>
-      <td style="color:var(--muted)">${e.user||'—'}</td>
+      <td style="color:var(--muted)">${escapeHtml(e.user||'—')}</td>
       <td>${toolBadge}</td>
     </tr>`;
   }).join('');

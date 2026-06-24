@@ -136,7 +136,17 @@ def _scan_spacy(
     model_name: str,
     min_confidence: float,
 ) -> NLPScanResult:
-    """Run NER using the spaCy backend."""
+    """Run NER using the spaCy backend.
+
+    Args:
+        active: Non-empty segments to actually scan — a subset of *all_segments*
+            with blank segments pre-filtered out.  Using the pre-filtered list
+            avoids wasting spaCy pipeline time on whitespace-only strings.
+        all_segments: The full segment list (used only to set
+            ``segments_scanned`` on the result so callers see the true count).
+        model_name: Name of the spaCy model to load (e.g. ``"en_core_web_sm"``).
+        min_confidence: Minimum entity confidence threshold (0.0-1.0).
+    """
     from ._model import get_model
 
     nlp = get_model(model_name)

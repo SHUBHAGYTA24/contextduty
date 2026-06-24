@@ -42,20 +42,35 @@ _custom_pattern_cache: dict[str, re.Pattern[str]] = {}
 
 @dataclass(frozen=True)
 class Finding:
+    """A single regex match found during a scan.
+
+    start/end are character offsets within the source line (not the file).
+    """
+
     detector: str
     value: str
-    start: int = 0  # character offset within the line
+    start: int = 0
     end: int = 0
 
 
 @dataclass(frozen=True)
 class ScanResult:
+    """Aggregated result of scanning one or more files.
+
+    Attributes:
+        findings_count: Total number of findings across all detectors.
+        detector_counts: Map of detector name → number of findings.
+        blocked: True if any detector fired in block mode.
+        blocked_by: Names of detectors that triggered a block (subset of
+            detector_counts keys).
+        files_scanned: File paths scanned (populated by scan_dir; empty for
+            single-file or in-memory scans).
+    """
+
     findings_count: int
     detector_counts: dict[str, int]
     blocked: bool
-    # Detectors that triggered a block (subset of detector_counts keys).
     blocked_by: list[str] = None  # type: ignore[assignment]
-    # Files scanned (populated by scan_dir; empty for single-file scans).
     files_scanned: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -201,6 +216,12 @@ def _extract_notebook_sources(path: Path) -> list[str]:
 
 
 def scan_file(path: Path, policy: Policy) -> ScanResult:
+    """Scan a single file and return a ScanResult.
+
+    Jupyter notebooks (.ipynb) have their cell sources extracted first;
+    other files are read line-by-line.  Binary files should be excluded
+    before calling this — binary content may produce misleading findings.
+    """
     detectors = _active_detectors(policy)
     detector_counts: dict[str, int] = {}
     blocked_detectors: set[str] = set()
@@ -430,6 +451,14 @@ def _redact_notebook(input_path: Path, output_path: Path, policy: Policy) -> Sca
 
 
 def redact_file(input_path: Path, output_path: Path, policy: Policy) -> ScanResult:
+    """Redact secrets in *input_path* and write the sanitized content to *output_path*.
+
+    Block-mode detectors are also redacted in the output (unlike scan_file, which
+    only flags them).  Jupyter notebooks preserve their JSON structure.
+
+    Returns:
+        ScanResult describing what was found and masked.
+    """
     if input_path.suffix.lower() == ".ipynb":
         try:
             return _redact_notebook(input_path, output_path, policy)
@@ -502,6 +531,7 @@ def scan_text(text: str, policy: Policy) -> ScanTextResult:
 
 
 def report_to_json(result: ScanResult) -> str:
+    """Serialize *result* to a JSON string suitable for CLI output or machine consumption."""
     payload = {
         "findings_count": result.findings_count,
         "detector_counts": result.detector_counts,

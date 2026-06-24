@@ -25,14 +25,22 @@ VALID_MODES = {"redact", "warn", "block"}
 
 @dataclass(frozen=True)
 class Policy:
+    """Active, validated policy controlling how ContextDuty scans and redacts.
+
+    Attributes:
+        mode: Global enforcement mode — ``"redact"``, ``"warn"``, or ``"block"``.
+        detectors: Names of active detectors (built-in + custom).
+        custom_detectors: User-defined regex detectors: ``{name: pattern_string}``.
+        detector_modes: Per-detector overrides that take priority over *mode*.
+            Example: ``{"api_key": "block", "phone": "warn"}``.
+        allow_patterns: Per-detector allowlists; values matching any pattern are
+            skipped entirely.  Example: ``{"email": ["noreply@.*"]}``.
+    """
+
     mode: str
     detectors: set[str]
     custom_detectors: dict[str, str]
-    # Per-detector mode overrides. Detectors not listed here fall back to `mode`.
-    # Example: {"api_key": "block", "phone": "warn"} while global mode is "redact".
     detector_modes: dict[str, str] = field(default_factory=dict)
-    # Per-detector allowlist patterns. Values matching any pattern are skipped.
-    # Example: {"email": ["noreply@.*", "alerts@corp\\.com"]}
     allow_patterns: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -118,6 +126,11 @@ DEFAULT_POLICY: dict[str, Any] = {
 
 
 def write_default_policy(path: Path) -> None:
+    """Write the built-in default policy JSON to *path*.
+
+    Omits ``detector_modes`` and ``allow_patterns`` (empty by default) so the
+    generated file stays minimal and readable.
+    """
     out = {k: v for k, v in DEFAULT_POLICY.items() if k not in {"detector_modes", "allow_patterns"}}
     path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
 
@@ -264,6 +277,20 @@ def _validate_allow_patterns(allow_patterns: dict[str, Any]) -> dict[str, list[s
 
 
 def load_policy(path: Path | None) -> Policy:
+    """Load and validate a Policy from *path*.
+
+    Args:
+        path: Path to a ``.contextduty.json`` policy file, or ``None`` to use
+            the built-in default policy.
+
+    Returns:
+        A validated, immutable :class:`Policy`.
+
+    Raises:
+        PolicyValidationError: If the policy file has an invalid schema or
+            contains unknown mode strings / invalid regex patterns.
+        PolicyCycleError: If the ``extends`` graph contains a cycle.
+    """
     if path is None:
         config = DEFAULT_POLICY
     else:
@@ -328,6 +355,10 @@ def load_policy(path: Path | None) -> Policy:
 
 
 def unknown_detector_names(policy: Policy) -> list[str]:
+    """Return detector names in *policy* that match no built-in or custom detector.
+
+    Used to surface typos or stale entries in the policy ``detectors`` list.
+    """
     built_in_names = {detector.name for detector in DETECTORS}
     allowed = built_in_names | set(policy.custom_detectors.keys())
     return sorted(name for name in policy.detectors if name not in allowed)

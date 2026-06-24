@@ -7,6 +7,24 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.0] — 2026-06-24
+
+First stable release.
+
+### Added
+- **Microsoft Presidio** as the primary NLP detection backend (spaCy fallback retained) — local, hybrid regex + NLP PII recognition
+- Local **100k-row NLP benchmark** (`benchmarks/`) measuring latency (p99 ~13 ms) and quality (precision 1.000, F1 0.94 / 0.99 at threshold 0.4)
+- Hosted **try-it demo** (Gradio Space, `demo/space/`)
+
+### Changed
+- **README fully revamped** — repositioned as a local-first *prompt firewall* built on Presidio, with an honest moat/comparison table (Presidio / GitGuardian / cloud DLP); removed stale and duplicated sections
+- Detection brain credited explicitly to Microsoft Presidio; ContextDuty positioned as the enforcement fabric (IDE + git + proxy + MCP + policy), not a new detector
+
+### Stats
+- 383 tests · 60 built-in detectors · 21 AI API endpoints · 6 AI tool ignore files
+
+---
+
 ## [0.3.0] — 2026-05-23
 
 ### Added

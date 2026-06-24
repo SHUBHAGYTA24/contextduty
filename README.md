@@ -1,524 +1,188 @@
 # ContextDuty
 
-> **The AI context firewall. Stop secrets from reaching any AI tool — before the prompt is assembled.**
+> **The local-first prompt firewall — stop secrets and PII from reaching any AI tool, before the prompt ever leaves your machine.**
 
 [![PyPI version](https://img.shields.io/pypi/v/contextduty.svg)](https://pypi.org/project/contextduty/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![359 Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-383%20passing-brightgreen.svg)](#)
 
----
+**Try it live:** [ContextDuty demo on Hugging Face Spaces](https://huggingface.co/spaces/shubhagyta-24/contextduty) · **Detection brain:** [Microsoft Presidio](https://github.com/microsoft/presidio)
 
-## What is ContextDuty?
-
-ContextDuty is a **local-first prompt firewall** that prevents secrets, API keys, and PII from leaking into AI coding assistants. It works with every AI tool — Cursor, GitHub Copilot, Claude, Windsurf, Cody, Amazon Q — current and future.
-
-**One install. Every AI tool. Zero cloud dependencies.**
-
-```
+```bash
 pip install contextduty
-contextduty protect        # blocks secrets from ALL AI tools at once
-contextduty proxy start    # intercepts HTTPS traffic to 21 AI APIs
+contextduty protect          # stop all AI tools from indexing your secrets
+contextduty install-hooks    # block commits that contain secrets
 ```
-
-> **Detection brain: [Microsoft Presidio](https://github.com/microsoft/presidio).** We don't reinvent PII detection — Presidio is best-in-class and runs locally, so we use it (plus 60 deterministic regex detectors for secrets). ContextDuty is the **enforcement fabric around it** — see [How is this different from Presidio?](#how-is-this-different-from-presidio) below.
 
 ---
 
-## How is this different from Presidio?
+## Why
 
-Presidio is a **detection/anonymization library** — you hand it text, it finds and masks PII. It is deliberately *not* a workflow product; its own docs say "additional systems and protections should be employed." **ContextDuty is that system.**
+By 2026, **34.8% of data developers paste into AI tools is sensitive** (Cyberhaven). A secret leaks the moment it's typed into a prompt — long before it ever reaches a repo. Traditional DLP can't see that flow, and enterprise AI plans don't stop an engineer pasting a key into Cursor.
 
-The moat is **coverage, locality, and enforcement — not detection.** Secrets and PII leak through four doors; every other tool guards one:
+ContextDuty closes every door a developer leaks through — the IDE, a git commit, live AI-API traffic, and MCP tool calls — with **one install, one policy, zero cloud**.
+
+## What it is (and what it isn't)
+
+ContextDuty is **not** a new PII detector. Detection is hard and already solved — so the NLP layer is powered by **[Microsoft Presidio](https://github.com/microsoft/presidio)** (with a spaCy fallback), plus 60 deterministic regex detectors for secrets.
+
+ContextDuty is the **enforcement fabric around that detection**: it wires it into the four places developers actually leak, governs everything with a portable block/warn/redact policy, and runs **100% locally** — no data leaves your machine, no SaaS, MIT-licensed.
+
+> **Presidio is the brain. ContextDuty is the firewall.**
 
 | | Microsoft Presidio | GitGuardian `ggshield` | Cloud DLP (Aona/Lasso/Nightfall) | **ContextDuty** |
 |---|---|---|---|---|
 | PII detection | ✅ (we use it) | ❌ | ✅ | ✅ via Presidio |
-| Secret detection | partial | ✅ (secrets only) | ✅ | ✅ (60 detectors) |
+| Secret detection | partial | ✅ (secrets only) | ✅ | ✅ 60 detectors |
 | Git pre-commit hook | ❌ | ✅ | ❌ | ✅ |
 | IDE indexing block (`.cursorignore`…) | ❌ | ❌ | ❌ | ✅ |
-| **Live HTTPS proxy** over AI-API traffic | ❌ | ❌ | browser/network | ✅ |
+| Live HTTPS proxy over AI-API traffic | ❌ | ❌ | network/browser | ✅ |
 | MCP server | ❌ | ❌ | ❌ | ✅ |
-| Portable block/warn/redact **policy** | operators only | limited | cloud console | ✅ (one JSON, all surfaces) |
-| **Local-first — nothing leaves the machine** | ✅ | cloud engine | ❌ (SaaS) | ✅ |
-| Open-source | ✅ | ❌ | ❌ | ✅ (MIT) |
-
-**In one line:** Presidio is the brain; ContextDuty is the firewall — it wires Presidio's detection into git, the IDE, live AI-API traffic, and MCP, and enforces one portable policy across all of them, fully local and open-source.
+| Portable block/warn/redact policy | operators only | limited | cloud console | ✅ one JSON, all surfaces |
+| Local-first — nothing leaves the machine | ✅ | cloud engine | ❌ SaaS | ✅ |
+| Open-source | ✅ | ❌ | ❌ | ✅ MIT |
 
 ---
 
-## Architecture
+## The five enforcement surfaces
 
 ```mermaid
-flowchart TD
-    WS["🗂️  YOUR WORKSPACE\n.env · config.py · keys/ · terraform.tfvars"]
+flowchart LR
+    WS["🗂️ Your workspace\n.env · keys/ · config"] --> CD
 
-    WS --> L1 & L2 & L3 & L4 & L5
+    subgraph CD["ContextDuty — 60 regex detectors + Presidio NLP"]
+        L1["IDE ignore files"]
+        L2["git pre-commit hook"]
+        L3["HTTPS proxy (21 AI APIs)"]
+        L4["MCP server"]
+        L5["CI / CD"]
+    end
 
-    L1["🛡️  Layer 1 — Workspace Ignore\n────────────────────────\n.cursorignore\n.copilotignore\n.codeiumignore\n.tabnine_ignore\n.amazonq/ignore\n.cody/ignore\n\nBlocks 6 AI tools from\never indexing secret files"]
-
-    L2["🔒  Layer 2 — Git Hook\n────────────────────────\npre-commit scan\n\nBlocks commits that\ncontain secrets before\nthey enter git history"]
-
-    L3["🌐  Layer 3 — HTTPS Proxy\n────────────────────────\n21 AI API endpoints\n\nRedacts secrets from\nrequest bodies in-flight\nbefore they leave machine"]
-
-    L4["🤖  Layer 4 — MCP Server\n────────────────────────\nCursor · Claude · VS Code\n\nScans tool-call responses\nbefore they enter the\nAI context window"]
-
-    L5["⚙️  Layer 5 — CI/CD\n────────────────────────\nGitHub Actions\n\nBlocks PRs that contain\nsecrets — policy-as-code\nenforcement in pipeline"]
-
-    L1 & L2 & L3 & L4 & L5 --> AI
-
-    AI["✅  AI TOOLS — ALL PROTECTED\nCursor · Copilot · Claude · Windsurf · Cody · Amazon Q\nOpenAI · Anthropic · Gemini · Azure OpenAI · and 11 more"]
-
-    style WS fill:#1e1e2e,stroke:#6c6f85,color:#cdd6f4
-    style L1 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
-    style L2 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
-    style L3 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
-    style L4 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
-    style L5 fill:#1e3a5f,stroke:#89b4fa,color:#cdd6f4
-    style AI fill:#1a3a1a,stroke:#a6e3a1,color:#cdd6f4
+    CD --> AI["✅ AI tools protected\nCursor · Copilot · Claude · Windsurf · Cody · Amazon Q · …"]
 ```
 
-| Layer | What it does |
-|---|---|
-| **1 — Workspace Ignore** | Generates ignore files for 6 AI tools — secrets never get indexed |
-| **2 — Git Hook** | Pre-commit scan blocks secrets from entering version history |
-| **3 — HTTPS Proxy** | Intercepts 21 AI API endpoints, redacts secrets in-flight |
-| **4 — MCP Server** | Scans tool-call responses before they enter the AI context window |
-| **5 — CI/CD** | Policy-as-code enforcement — PRs with secrets cannot merge |
+| Surface | What it does | Command |
+|---|---|---|
+| **IDE ignore** | Generates ignore files for 6 AI tools so secrets are never indexed | `contextduty protect` |
+| **Git hook** | Pre-commit scan blocks secrets from entering history | `contextduty install-hooks` |
+| **HTTPS proxy** | Intercepts 21 AI API hosts, redacts secrets from request bodies in-flight | `contextduty proxy start` |
+| **MCP server** | Redacts tool-call results before they enter the AI context window | `contextduty-mcp` |
+| **CI/CD** | Policy-as-code gate — PRs with secrets exit non-zero | `contextduty scan src/` |
 
 ---
 
 ## Quick start
 
 ```bash
-# 1. Install
-pip install contextduty
+pip install contextduty          # core (regex detectors, hooks, CLI)
+cd your-project/                 # run from your git root
 
-# 2. Go to your project root (where .git lives) — all commands run from here
-cd your-project/
+contextduty init                 # create .contextduty.json policy
+contextduty protect              # write ignore files for all 6 AI tools
+contextduty install-hooks        # block secret-bearing commits
 
-# 3. Try the interactive demo (20 seconds)
-contextduty demo
-
-# 4. Create a policy file
-contextduty init
-
-# 5. Block ALL AI tools from reading your secrets
-contextduty protect
-
-# 6. Block secrets from entering git history
-contextduty install-hooks
-
-# 7. Intercept live AI API calls (requires separate install)
-pip install 'contextduty[proxy]'
-contextduty proxy setup          # one-time: installs CA cert (needs sudo)
-contextduty proxy start          # start intercepting
+# Optional extras
+pip install 'contextduty[presidio]'   # NLP PII detection (recommended)
+pip install 'contextduty[proxy]'      # live HTTPS interception
 ```
 
-> **Note:** `contextduty install-hooks` must be run from your project root (the folder that contains `.git/`). It will fail if run from a subdirectory.
-
----
-
-## See it in action
-
-![ContextDuty demo — scan, redact, protect, block](demo/contextduty-demo.gif)
-
-> Secrets detected → redacted with deterministic masks → commit blocked → AI tools protected.  
-> Run it yourself: `contextduty demo`
-
-## NLP demo — catch what regex misses
-
-![ContextDuty NLP demo](examples/nlp-demo/nlp-demo.gif)
-
-> 10x more findings: person names, organizations, dates, and medical entities that regex can't see.  
-> Run it yourself: `contextduty scan --nlp src/`
-
----
-
-## Layer 1 — Universal workspace protection
-
-One command generates ignore files for **every** AI tool:
+Scan or redact anything:
 
 ```bash
-$ contextduty protect
-
-────────────────────────────────────────────────────────
-  ContextDuty — Universal AI Workspace Protection
-────────────────────────────────────────────────────────
-
-  ⚠  12 file(s) contain secrets/PII
-
-  ✓  Written 6 ignore files:
-
-     ✓  .cursorignore        Cursor
-     ✓  .copilotignore       GitHub Copilot
-     ✓  .codeiumignore       Codeium / Windsurf
-     ✓  .tabnine_ignore      Tabnine
-     ✓  .amazonq/ignore      Amazon Q
-     ✓  .cody/ignore         Sourcegraph Cody
+contextduty scan src/                          # JSON findings report
+contextduty scan --nlp src/                    # add Presidio NLP PII detection
+contextduty redact --in raw.txt --out clean.txt
 ```
 
-**Watch mode** — auto-updates when files change:
+---
+
+## Detection
+
+**60 built-in regex detectors** across Cloud/Infra, VCS/CI, Payment, Messaging, AI/ML, Databases, Generic secrets, IaC, PII, Healthcare, and Crypto/Web3 — including `aws_key`, `github_pat`, `stripe_secret`, `openai_key`, `postgres_dsn`, `ssh`/`pgp` keys, `credit_card`, `ssn`, `jwt_token`, and more. See [`detectors.py`](src/contextduty/detectors.py) for the full list.
+
+**Presidio NLP** catches unstructured PII regex can't — person names, organizations, locations, dates — running entirely locally:
 
 ```bash
-contextduty protect watch   # runs continuously, updates all 6 ignore files
-```
-
-**Future-proof:** When a new AI tool launches, we add 3 lines to the registry. Your workspace is instantly protected.
-
----
-
-## Layer 2 — Pre-commit hook
-
-```bash
-# Run from your project root (the folder that contains .git/)
-cd your-project/
-contextduty install-hooks
-```
-
-Every `git commit` is scanned. If secrets are found, the commit is rejected:
-
-```
-$ git commit -m "add deployment config"
-
-[ContextDuty] BLOCKED: config.py
-  aws_key: 1 finding(s)
-  openai_key: 1 finding(s)
-
-╔══════════════════════════════════════════════════════════════╗
-║  ContextDuty blocked this commit.                           ║
-║  Remove or redact them before committing.                   ║
-╚══════════════════════════════════════════════════════════════╝
-```
-
----
-
-## Layer 3 — HTTPS proxy (real-time interception)
-
-The proxy sits between your AI tools and their API endpoints. It intercepts requests to **21 AI API hosts** and redacts secrets from the request body before they leave your machine.
-
-```bash
-# Step 1 — install proxy dependencies (mitmproxy, ~50 packages)
-pip install 'contextduty[proxy]'
-
-# Step 2 — one-time CA cert setup (needs sudo, run once per machine)
-contextduty proxy setup
-
-# Step 3 — start intercepting
-contextduty proxy start
-
-──────────────────────────────────────────────────────
-  ContextDuty Proxy
-──────────────────────────────────────────────────────
-
-  Listening on   127.0.0.1:8080
-  Intercepting   21 AI API endpoints
-  Policy         .contextduty.json
-```
-
-**What it intercepts:**
-
-| Provider | Endpoints |
-|---|---|
-| OpenAI | `api.openai.com` |
-| Anthropic (Claude) | `api.anthropic.com` |
-| Cursor | `cursor.sh`, `api2.cursor.sh` |
-| GitHub Copilot | `copilot.github.com`, `api.githubcopilot.com` |
-| Google (Gemini) | `generativelanguage.googleapis.com`, `aiplatform.googleapis.com` |
-| Azure OpenAI | `openai.azure.com` |
-| Codeium / Windsurf | `server.codeium.com` |
-| Amazon Q | `codewhisperer.us-east-1.amazonaws.com` |
-| Sourcegraph Cody | `sourcegraph.com` |
-| Others | Cohere, Mistral, Groq, Together, Perplexity, DeepSeek, Fireworks, Tabnine |
-
-**Declarative field walker** — the proxy knows exactly where each provider puts user content in their JSON payload (messages, context, system prompts) and only scans those fields. Adding a new provider = adding field paths, zero code changes.
-
----
-
-## Layer 4 — MCP server (Cursor / Claude / VS Code)
-
-ContextDuty runs as an MCP server. When AI agents fetch files or database results via tools, ContextDuty intercepts the response:
-
-```json
-// ~/.cursor/mcp.json or ~/.claude/claude_desktop_config.json
-{
-  "mcpServers": {
-    "contextduty": { "command": "contextduty-mcp" }
-  }
-}
-```
-
-```
-Agent calls:  read_file("customers.json")
-Tool returns: {"name": "Jane Smith", "ssn": "123-45-6789"}
-ContextDuty:  {"name": "<PERSON_a3f2>", "ssn": "<SSN_b7c1>"}
-
-→ Real values never enter the prompt. Never reach the AI model.
-```
-
----
-
-## Layer 5 — CI/CD enforcement
-
-```yaml
-# .github/workflows/contextduty.yml
-- name: ContextDuty scan
-  run: |
-    pip install contextduty
-    contextduty scan src/ --policy .contextduty.json
-```
-
-With `"mode": "block"`, the pipeline exits non-zero. PR cannot merge.
-
----
-
-## Jupyter / Colab / Databricks — notebook API
-
-Data scientists who live in notebooks and don't use git still need protection. One import, zero config:
-
-```python
-# Cell 1
-from contextduty.notebook import guard, redact
-
-# Cell 2 — scan any text before sending to an API
-guard("""
-    aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-    db_url = postgres://admin:password123@prod-db:5432/users
-""")
-# ⚠️ ContextDuty: 2 secret(s) found!
-#   • aws_secret: 1 occurrence(s)
-#   • postgres_dsn: 1 occurrence(s)
-
-# Cell 3 — get a clean version
-clean = redact("db = postgres://admin:secret@prod:5432/app")
-# → "db = <POSTGRES_DSN_a1b2c3d4>"
-```
-
-| Function | What it does |
-|---|---|
-| `guard(text)` | Scan + print a visible warning (rich HTML in Jupyter, plain text in terminal) |
-| `redact(text)` | Return text with all secrets replaced by deterministic masks |
-| `scan(text)` | Return structured `ScanTextResult` for programmatic use |
-
-**Notebook file scanning** — `.ipynb` files are also scanned by `contextduty scan`, `install-hooks`, and `redact`. Cell sources, markdown cells, and cell outputs (including `display_data` and `execute_result`) are all covered.
-
-📓 **[Try the example notebook →](examples/notebook_guard.ipynb)**
-
----
-
-## Detection: 60 built-in detectors
-
-| Category | Detectors |
-|---|---|
-| **Cloud / Infra** | `aws_key`, `aws_secret`, `aws_mfa_serial`, `gcp_service_account`, `gcp_api_key`, `azure_client_secret`, `azure_storage_key` |
-| **VCS / CI** | `github_pat`, `github_oauth`, `github_app_token`, `github_refresh_token`, `gitlab_pat`, `gitlab_runner_token` |
-| **Payment** | `stripe_secret`, `stripe_restricted`, `stripe_publishable`, `stripe_webhook`, `paypal_secret`, `credit_card` |
-| **Messaging** | `slack_bot_token`, `slack_user_token`, `slack_workspace_token`, `slack_config_token`, `twilio_account_sid`, `twilio_auth_token`, `sendgrid_key`, `mailgun_key` |
-| **AI / ML** | `openai_key`, `anthropic_key`, `huggingface_token`, `cohere_key`, `replicate_key` |
-| **Databases** | `postgres_dsn`, `mysql_dsn`, `mongodb_dsn`, `redis_dsn`, `elasticsearch_dsn`, `sqlserver_dsn` |
-| **Generic secrets** | `api_key`, `generic_secret`, `private_key_block`, `certificate_block`, `pgp_private`, `bearer_token`, `jwt_token`, `basic_auth_url`, `env_secret` |
-| **IaC** | `terraform_state_secret`, `docker_auth`, `k8s_secret_data` |
-| **PII** | `email`, `phone`, `ssn`, `passport` |
-| **Healthcare** | `npi_number`, `dea_number`, `icd10_code` |
-| **Crypto / Web3** | `ethereum_private_key`, `bitcoin_private_key_wif`, `mnemonic_phrase` |
-
-**Deterministic masks:** `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5d44a2dc>` — same value, same mask, everywhere. Audit logs stay correlatable without storing raw secrets.
-
-**Custom detectors** — add your own regex patterns:
-
-```json
-{
-  "custom_detectors": {
-    "employee_id": "\\bEMP-[0-9]{6}\\b",
-    "patient_mrn": "\\bMRN-[0-9]{8}\\b"
-  }
-}
-```
-
----
-
-## NLP-based PII detection (Layer 2)
-
-Beyond regex, ContextDuty runs **spaCy NER** to catch unstructured PII — person names, organizations, locations, dates, and financial entities hiding in strings, comments, docstrings, and notebook cells.
-
-```bash
-pip install contextduty[nlp]
+pip install 'contextduty[presidio]'
 python -m spacy download en_core_web_sm
-
-# Scan with NLP enabled
 contextduty scan --nlp src/
-contextduty scan --nlp --nlp-confidence 0.7 src/
 ```
 
-**How it works:**
+**Deterministic masks:** `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5d44a2dc>` — same value, same mask, everywhere — so audit logs stay correlatable without storing raw secrets.
 
-1. **Extract** — pulls natural-language segments from code (strings, comments, docstrings, notebook cells/outputs)
-2. **Detect** — runs spaCy NER (`en_core_web_sm`, 12MB CNN, 10K+ tok/s on CPU)
-3. **Score** — context-aware confidence adjustment:
-   - 📈 **Boosts** near PII keywords (`patient`, `SSN`, `SELECT FROM`, `diagnosis`, `account`)
-   - 📉 **Suppresses** in code contexts (`import`, `def`, `localhost`, `example.com`, `TODO`)
-4. **Return** — findings with confidence scores, compatible with the existing scan pipeline
+**Custom detectors** (no code, no redeploy):
 
-**In notebooks:**
-
-```python
-from contextduty.notebook import guard
-
-guard("""
-    Patient: John Smith, DOB: 1990-01-15
-    aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-""")
-# ⚠️  ContextDuty: 2 finding(s) detected!
-#   • aws_secret: 1 occurrence(s)
-#   🧠 NLP-detected PII:
-#   • nlp_person: John Smith [confidence: 0.95]
+```json
+{ "custom_detectors": { "employee_id": "\\bEMP-[0-9]{6}\\b" } }
 ```
 
-**Enterprise fine-tuning** — train a custom model on your domain data, deploy on CPU:
-
-```python
-from contextduty.nlp import load_model
-load_model("/path/to/bank-custom-ner-model")
-```
+> 📊 **Benchmarked:** 100k prompts, fully local — p99 latency ~13 ms, precision 1.000, F1 0.94 (0.99 at threshold 0.4). See [benchmarks/README.md](benchmarks/README.md).
 
 ---
 
-## Policy system
+## Policy
 
-```bash
-contextduty init   # creates .contextduty.json
-```
-
-```json
+```jsonc
 {
-  "mode": "redact",
-  "detectors": ["email", "phone", "aws_key", "openai_key", "github_pat", "postgres_dsn"],
-  "custom_detectors": {},
-  "detector_modes": { "aws_key": "block", "openai_key": "block" },
-  "allow_patterns": { "email": ["@example\\.com$", "@test\\.internal$"] }
+  "mode": "redact",                                  // redact | warn | block
+  "detectors": ["email", "aws_key", "openai_key", "postgres_dsn"],
+  "detector_modes": { "aws_key": "block" },          // per-detector override
+  "allow_patterns": { "email": ["@example\\.com$"] },// known-safe values
+  "extends": "../../policies/org-baseline.json"      // team baseline + repo override
 }
 ```
 
 | Mode | Behavior |
 |---|---|
-| `redact` | Replace matched values with deterministic masks |
-| `warn` | Log findings, don't modify, don't block |
+| `redact` | Replace matches with deterministic masks |
+| `warn` | Log findings, don't modify or block |
 | `block` | Exit non-zero — for CI and pre-commit hard stops |
 
-**Policy layering** — team baseline + repo override:
+Compliance baselines included: [`policies/soc2-baseline.json`](policies/soc2-baseline.json), [`policies/hipaa-baseline.json`](policies/hipaa-baseline.json).
+
+---
+
+## Notebooks, MCP & dashboard
+
+**Jupyter / Colab / Databricks** — one import, zero config:
+
+```python
+from contextduty.notebook import guard, redact
+guard("aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")  # prints a warning
+clean = redact("db = postgres://admin:secret@prod:5432/app")               # → <POSTGRES_DSN_…>
+```
+
+**MCP server** — redacts tool-call results before they enter the model's context:
 
 ```json
-{ "extends": "../../policies/org-baseline.json", "mode": "block" }
+{ "mcpServers": { "contextduty": { "command": "contextduty-mcp" } } }
 ```
 
-**Compliance baselines** included: `policies/soc2-baseline.json`, `policies/hipaa-baseline.json`
-
----
-
-## Audit dashboard
+**Audit dashboard** — local web UI, all data stays on your machine:
 
 ```bash
-contextduty dashboard --demo    # try it with synthetic data
-contextduty dashboard           # reads ~/.contextduty/audit.jsonl
+contextduty dashboard --demo   # synthetic data
+contextduty dashboard          # reads ~/.contextduty/audit.jsonl
 ```
-
-![ContextDuty Audit Dashboard](demo/dashboard-preview.png)
-
-Local web UI — zero dependencies, all data stays on your machine:
-
-| Section | What it shows |
-|---|---|
-| **Summary cards** | Total scans, findings, blocked commits, clean scan rate |
-| **Detection method breakdown** | Regex vs NLP finding split with coverage ratio |
-| **Findings by detector** | Top 15 detectors ranked by finding count |
-| **30-day timeline** | Daily findings trend with gridlines and data points |
-| **Operations / Developers / Hotspot files** | Donut chart, per-user bar chart, files with most findings |
-| **Recent activity** | Filterable table with search + status chips (All / Blocked / Warnings / Clean) |
-| **Export** | JSON API (`/api/data`) and CSV download |
-
-Auto-refreshes every 30 seconds. Light/dark theme toggle. Responsive layout.
 
 ---
 
-## All commands
+## Commands
 
 | Command | Description |
 |---|---|
-| `contextduty demo` | Interactive demo — catches secrets in 20 seconds |
-| `contextduty protect` | Write ignore files for ALL 6 AI tools at once |
-| `contextduty protect watch` | Background daemon, auto-update on file changes |
-| `contextduty protect status` | Show what's protected and what's not |
-| `contextduty proxy setup` | One-time CA cert install |
-| `contextduty proxy start` | Start HTTPS interception proxy |
-| `contextduty proxy stop` | Stop the proxy |
-| `contextduty proxy status` | Check if proxy is running |
-| `contextduty cursor setup` | Cursor-specific workspace protection |
-| `contextduty cursor watch` | Cursor-specific watch mode |
-| `contextduty scan <file\|dir>` | Scan and print JSON findings |
-| `contextduty redact --in <f> --out <f>` | Redact file, write clean copy |
-| `contextduty install-hooks` | Install git pre-commit hook |
-| `contextduty uninstall-hooks` | Remove the hook |
-| `contextduty dashboard` | Open local audit dashboard |
-| `contextduty report` | Summarize an audit log |
-| `contextduty policy validate` | Validate and resolve policy file |
-| `contextduty init` | Create default `.contextduty.json` |
-
----
-
-## Project structure
-
-```
-src/contextduty/
-├── config.py              # Centralized paths, env vars, constants
-├── engine.py              # Core scan/redact engine (60 detectors, .ipynb support)
-├── detectors.py           # Regex detector definitions
-├── policy.py              # Policy loading, validation, inheritance
-├── cli.py                 # CLI entry point (18 commands)
-├── protect.py             # Universal workspace protection
-├── cursor.py              # Cursor-specific shortcut
-├── notebook.py            # Jupyter/Colab/Databricks API (guard, redact, scan)
-├── nlp/                   # NLP-based PII detection (optional, requires spaCy)
-│   ├── _model.py          #   spaCy model loading and lifecycle
-│   ├── _extract.py        #   text segment extraction from code/notebooks
-│   ├── _scoring.py        #   context-aware confidence scoring
-│   ├── _scanner.py        #   core NER scanning orchestration
-│   └── _types.py          #   NLPFinding and NLPScanResult dataclasses
-├── demo.py                # Interactive demo
-├── dashboard.py           # Local audit web UI
-├── core/
-│   ├── __init__.py        # Public API (lazy imports)
-│   └── exceptions.py      # Typed exception hierarchy
-├── ui/
-│   └── output.py          # NO_COLOR-compliant terminal formatting
-├── adapters/
-│   └── ide.py             # AI tool registry + ignore file generation
-└── proxy/
-    ├── scope.py           # 21 AI API hosts (single source of truth)
-    ├── interceptor.py     # Declarative JSON field walker
-    ├── addon.py           # mitmproxy request handler
-    ├── server.py          # Proxy lifecycle (start/stop/daemon)
-    ├── ca.py              # CA certificate management
-    ├── system.py          # OS proxy configuration
-    └── feed.py            # Live terminal feed for interceptions
-```
-
----
-
-## How it compares
-
-| | ContextDuty | LLM Gateways | .gitignore |
-|---|---|---|---|
-| Blocks AI indexing (Cursor, Copilot, etc.) | ✅ 6 tools | ❌ | ❌ |
-| Pre-commit secret scanning | ✅ | ❌ | ❌ |
-| NLP-based PII detection (names, orgs, dates) | ✅ spaCy NER | ❌ | ❌ |
-| HTTPS proxy (intercepts any AI API) | ✅ 21 endpoints | ✅ (different purpose) | ❌ |
-| MCP tool-call interception | ✅ | ❌ | ❌ |
-| Runs 100% locally | ✅ | ❌ | ✅ |
-| Policy-as-code | ✅ | Partial | ❌ |
-| Works offline / air-gapped | ✅ | ❌ | ✅ |
-| Your data sent to third parties | Never | Sometimes | N/A |
+| `contextduty protect [watch\|status]` | Write/auto-update ignore files for all 6 AI tools |
+| `contextduty install-hooks` / `uninstall-hooks` | Manage the git pre-commit hook |
+| `contextduty proxy [setup\|start\|stop\|status]` | Manage the HTTPS interception proxy |
+| `contextduty scan <file\|dir> [--nlp]` | Scan and print JSON findings |
+| `contextduty redact --in <f> --out <f>` | Write a redacted copy |
+| `contextduty dashboard` / `report` | Audit dashboard / log summary |
+| `contextduty policy validate` | Validate and resolve a layered policy |
+| `contextduty init` | Create a default `.contextduty.json` |
+| `contextduty demo` | 20-second interactive walkthrough |
 
 ---
 
@@ -528,34 +192,20 @@ src/contextduty/
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
 pip install -e ".[dev]"
-make check    # format + lint + 359 tests
+make check    # format + lint + tests
 ```
 
----
+Architecture: `engine.py` (scan/redact), `detectors.py` (60 patterns), `policy.py` (layered policy), `nlp/` (Presidio + spaCy), `proxy/` (mitmproxy field-walker), `adapters/ide.py` (AI tool registry), `dashboard.py` (audit UI). See [docs/USER_MANUAL.md](docs/USER_MANUAL.md).
 
 ## Roadmap
 
-- [x] 60 built-in detectors
-- [x] Pre-commit hook (`contextduty install-hooks`)
-- [x] MCP server (Cursor, Claude, VS Code)
-- [x] Directory scanning (`contextduty scan src/`)
-- [x] Audit dashboard (`contextduty dashboard`)
-- [x] Per-detector modes and allow patterns
-- [x] Policy layering with `extends`
-- [x] Interactive demo (`contextduty demo`)
-- [x] Universal workspace protection (`contextduty protect`) — 6 AI tools
-- [x] HTTPS proxy intercepting 21 AI API endpoints
-- [x] Declarative field walker (new AI provider = add paths, zero code)
-- [x] Enterprise architecture (config, exceptions, UI, adapters)
-- [x] Published on PyPI (`pip install contextduty`)
-- [x] Jupyter / Colab / Databricks notebook API (`guard`, `redact`, `scan`)
-- [x] `.ipynb` file scanning (cells, outputs, display_data)
-- [x] NLP-based PII detection (spaCy NER with context-aware scoring)
+- [x] 60 detectors · git hook · MCP · HTTPS proxy (21 APIs) · 6 IDE ignore files
+- [x] Presidio NLP PII detection · notebook API · audit dashboard · policy layering
+- [x] Local 100k-row latency/quality benchmark · hosted demo Space
 - [ ] VS Code / Cursor extension
 - [ ] Prometheus metrics endpoint
-
----
+- [ ] International + domain-specific detector packs
 
 ## License
 
-MIT. Issues and PRs welcome. [Open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues) if a detector is missing or misfiring.
+MIT. Built on [Microsoft Presidio](https://github.com/microsoft/presidio). Issues and PRs welcome — [open an issue](https://github.com/SHUBHAGYTA24/contextduty/issues) if a detector is missing or misfiring.

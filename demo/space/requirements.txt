@@ -1,3 +1,4 @@
 gradio>=4.0
-contextduty[presidio]>=0.3.0
+# Install from GitHub until 0.3.0 is published to PyPI.
+contextduty[presidio] @ git+https://github.com/SHUBHAGYTA24/contextduty.git@main
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl

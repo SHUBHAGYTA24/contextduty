@@ -216,9 +216,13 @@ def test_redact_body_cursor_full():
     findings, det_counts, blocked = redact_body(body, "api2.cursor.sh", scan_fn)
     assert findings > 0
     assert "aws_key" in det_counts
-    # The AWS key should be redacted in-place
-    assert aws_key not in body["context"]["files"][0]["content"]
-    assert "<AWS_KEY_" in body["context"]["files"][0]["content"]
+    # The AWS key should be redacted in-place. Note: `AWS_KEY=` is also an
+    # env_secret match, and the longer match wins the redaction span, so the
+    # masked token may be labelled <ENV_SECRET_...>; either way the raw value
+    # must be gone and replaced by a stable_mask token.
+    content = body["context"]["files"][0]["content"]
+    assert aws_key not in content
+    assert "<AWS_KEY_" in content or "<ENV_SECRET_" in content
     # Clean file untouched
     assert body["context"]["files"][1]["content"] == "print('hello')"
 

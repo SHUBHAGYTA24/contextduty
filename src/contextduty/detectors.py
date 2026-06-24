@@ -1,4 +1,14 @@
-"""Built-in detectors for secrets and PII."""
+"""Built-in detectors for secrets and PII.
+
+Each detector is a named, compiled regex applied line-by-line by the scan
+engine.  Patterns are intentionally bounded (anchored, length-limited, or
+context-gated) to keep precision high — a detector that fires on ordinary
+identifiers is worse than no detector at all because it trains users to
+ignore findings.
+
+The set is grouped by category below.  To add a detector, add one entry to
+``_PATTERNS`` (and a matching row in the README detector table).
+"""
 
 from __future__ import annotations
 
@@ -9,157 +19,218 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Detector:
+    """A named regex pattern used by the scan engine.
+
+    *name* identifies the finding type (e.g. ``"aws_key"``).
+    *pattern* is a compiled regex applied line-by-line to source text.
+    """
+
     name: str
     pattern: re.Pattern[str]
 
 
-DETECTORS: list[Detector] = [
-    # ── PII ──────────────────────────────────────────────────────────────────
-    Detector("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
-    Detector(
-        "phone",
-        re.compile(r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b"),
-    ),
-    # ── Generic API / bearer tokens ──────────────────────────────────────────
-    # Catches Stripe (sk_live_, rk_, pk_), generic service keys with _ separator
-    Detector("api_key", re.compile(r"\b(?:sk|rk|pk)_[A-Za-z0-9_]{16,}\b")),
-    Detector("bearer_token", re.compile(r"\bBearer\s+[A-Za-z0-9\-._~+/]+=*\b", re.IGNORECASE)),
-    # ── AWS ──────────────────────────────────────────────────────────────────
-    Detector("aws_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
-    # AWS secret access key (bare 40-char base64, must follow a context keyword)
-    Detector(
+# ---------------------------------------------------------------------------
+# Pattern library — (name, regex, flags).  Compiled into DETECTORS below.
+#
+# Precision notes for the broad categories:
+#   * api_key / generic_secret require an explicit key= context or a known
+#     vendor prefix — never a bare alphanumeric run.
+#   * passport / icd10_code / npi_number require a nearby context keyword so
+#     they don't fire on ordinary identifiers.
+# ---------------------------------------------------------------------------
+
+_PATTERNS: list[tuple[str, str, int]] = [
+    # ── Cloud / Infrastructure ──────────────────────────────────────────────
+    ("aws_key", r"\bAKIA[0-9A-Z]{16}\b", 0),
+    (
         "aws_secret",
-        re.compile(
-            r"(?i)(?:aws_secret_access_key|aws_secret|secret_key)\s*[=:]\s*"
-            r"['\"]?([A-Za-z0-9/+=]{40})['\"]?"
-        ),
+        r"(?i)aws[_\-\s]?secret[_\-\s]?(?:access[_\-\s]?)?key\s*[=:]\s*"
+        r"['\"]?([A-Za-z0-9+/]{40})['\"]?",
+        0,
     ),
-    # ── GCP ──────────────────────────────────────────────────────────────────
-    Detector(
-        "gcp_service_account",
-        re.compile(r'"type"\s*:\s*"service_account"'),
+    ("aws_mfa_serial", r"\barn:aws:iam::\d{12}:mfa/\S+", 0),
+    ("gcp_service_account", r'"type"\s*:\s*"service_account"', 0),
+    ("gcp_api_key", r"\bAIza[0-9A-Za-z\-_]{35}\b", 0),
+    (
+        "azure_client_secret",
+        r"(?i)(?:azure|az)[_\-\s]?(?:client|app)[_\-\s]?secret\s*[=:]\s*"
+        r"['\"]?([A-Za-z0-9+/=_\-]{32,})['\"]?",
+        0,
     ),
-    # ── GitHub ───────────────────────────────────────────────────────────────
-    Detector(
-        "github_pat",
-        re.compile(
-            r"\b(?:"
-            r"ghp_[A-Za-z0-9]{36}"  # classic personal access token
-            r"|gho_[A-Za-z0-9]{36}"  # OAuth token
-            r"|ghu_[A-Za-z0-9]{36}"  # user-to-server token
-            r"|ghs_[A-Za-z0-9]{36}"  # server-to-server token
-            r"|ghr_[A-Za-z0-9]{36}"  # refresh token
-            r"|github_pat_[A-Za-z0-9_]{82}"  # fine-grained PAT
-            r")\b"
-        ),
-    ),
-    # ── AI / ML service keys ─────────────────────────────────────────────────
-    Detector(
-        "openai_key",
-        re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9]{20,}\b"),
-    ),
-    Detector(
-        "anthropic_key",
-        re.compile(r"\bsk-ant-[a-zA-Z0-9\-_]{20,}\b"),
-    ),
-    Detector(
-        "huggingface_token",
-        re.compile(r"\bhf_[A-Za-z0-9]{30,}\b"),
-    ),
-    # ── Communication platforms ───────────────────────────────────────────────
-    Detector(
-        "slack_token",
-        re.compile(
-            r"\b(?:"
-            r"xoxb-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{24}"  # bot token
-            r"|xoxp-[0-9]{10,}-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{32}"  # user token
-            r"|xoxa-[0-9]{10,}-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{32}"  # legacy auth
-            r"|xoxs-[0-9]{10,}-[0-9]{10,}-[0-9]{10,}-[A-Za-z0-9]{32}"  # session
-            r"|xapp-[0-9]-[A-Z0-9]{10,}-[0-9]{13}-[a-f0-9]{64}"  # app-level
-            r")\b"
-        ),
-    ),
-    # ── Payment platforms ─────────────────────────────────────────────────────
-    Detector(
-        "stripe_webhook",
-        re.compile(r"\bwhsec_[a-zA-Z0-9]{32,}\b"),
-    ),
-    # ── Email / marketing ─────────────────────────────────────────────────────
-    Detector(
-        "sendgrid_key",
-        re.compile(r"\bSG\.[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\b"),
-    ),
-    Detector(
-        "mailchimp_key",
-        re.compile(r"\b[0-9a-f]{32}-us[0-9]{1,2}\b"),
-    ),
-    # ── Package registries ────────────────────────────────────────────────────
-    Detector(
-        "npm_token",
-        re.compile(r"\bnpm_[A-Za-z0-9]{36}\b"),
-    ),
-    # ── Twilio ────────────────────────────────────────────────────────────────
-    Detector(
-        "twilio_sid",
-        re.compile(r"\bAC[a-fA-F0-9]{32}\b"),
-    ),
-    # ── Azure ─────────────────────────────────────────────────────────────────
-    Detector(
+    (
         "azure_storage_key",
-        re.compile(
-            r"DefaultEndpointsProtocol=https;AccountName=[^;]{3,};AccountKey=[A-Za-z0-9+/]{86}==;"
-        ),
+        r"DefaultEndpointsProtocol=https;AccountName=[^;]{1,64};"
+        r"AccountKey=[A-Za-z0-9+/=]{86}==",
+        0,
     ),
-    # ── Database connection strings ───────────────────────────────────────────
-    Detector(
-        "db_dsn",
-        re.compile(
-            r"\b(?:postgres(?:ql?)?|mysql(?:\+[a-z]+)?|mongodb(?:\+srv)?|redis(?:s)?|mssql(?:\+[a-z]+)?)"
-            r"://[^:\s@]{1,64}:[^@\s]{1,128}@[^\s'\">]{4,}\b",
-            re.IGNORECASE,
-        ),
+    # ── VCS / CI tokens ─────────────────────────────────────────────────────
+    ("github_pat", r"\bghp_[A-Za-z0-9]{36}\b", 0),
+    ("github_oauth", r"\bgho_[A-Za-z0-9]{36}\b", 0),
+    ("github_app_token", r"\bghs_[A-Za-z0-9]{36}\b", 0),
+    ("github_refresh_token", r"\bghr_[A-Za-z0-9]{36,76}\b", 0),
+    ("gitlab_pat", r"\bglpat-[A-Za-z0-9\-_]{20}\b", 0),
+    ("gitlab_runner_token", r"\bglrt-[A-Za-z0-9\-_]{20}\b", 0),
+    # ── Payment / Fintech ───────────────────────────────────────────────────
+    ("stripe_secret", r"\bsk_(?:live|test)_[A-Za-z0-9]{24,}\b", 0),
+    ("stripe_restricted", r"\brk_(?:live|test)_[A-Za-z0-9]{24,}\b", 0),
+    ("stripe_publishable", r"\bpk_(?:live|test)_[A-Za-z0-9]{24,}\b", 0),
+    ("stripe_webhook", r"\bwhsec_[A-Za-z0-9]{32,}\b", 0),
+    (
+        "paypal_secret",
+        r"(?i)paypal[_\-\s]?(?:client|app)[_\-\s]?secret\s*[=:]\s*"
+        r"['\"]?([A-Za-z0-9\-_]{32,})['\"]?",
+        0,
     ),
-    # ── Cryptographic material ────────────────────────────────────────────────
-    Detector(
-        "ssh_private_key",
-        re.compile(r"-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    (
+        "credit_card",
+        r"\b(?:4[0-9]{12}(?:[0-9]{3})?"  # Visa
+        r"|5[1-5][0-9]{14}"  # Mastercard
+        r"|3[47][0-9]{13}"  # Amex
+        r"|6(?:011|5[0-9]{2})[0-9]{12})\b",  # Discover
+        0,
     ),
-    Detector(
-        "pgp_private_key",
-        re.compile(r"-----BEGIN PGP PRIVATE KEY BLOCK-----"),
+    # ── Messaging / Comms ───────────────────────────────────────────────────
+    ("slack_bot_token", r"\bxoxb-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{24}\b", 0),
+    (
+        "slack_user_token",
+        r"\bxoxp-[0-9]{10,13}-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{32}\b",
+        0,
     ),
-    # Generic PKCS#8 / PKCS#1 PEM private key not covered by the specific patterns above
-    Detector(
-        "private_key_pem",
-        re.compile(r"-----BEGIN PRIVATE KEY-----"),
+    (
+        "slack_workspace_token",
+        r"\bxoxa-2-[0-9]{10,13}-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{16}\b",
+        0,
     ),
-    # ── Google OAuth access token ─────────────────────────────────────────────
-    Detector(
-        "google_oauth_token",
-        re.compile(r"\bya29\.[A-Za-z0-9\-_]{60,}\b"),
+    ("slack_config_token", r"\bxoxe\.xox[bp]-1-[A-Za-z0-9]{100,}\b", 0),
+    ("twilio_account_sid", r"\bAC[a-f0-9]{32}\b", 0),
+    (
+        "twilio_auth_token",
+        r"(?i)twilio[_\-\s]?auth[_\-\s]?token\s*[=:]\s*['\"]?([a-f0-9]{32})['\"]?",
+        0,
     ),
-    # ── JWT ───────────────────────────────────────────────────────────────────
-    # eyJ prefix = base64url-encoded JSON header, followed by two more segments
-    Detector(
-        "jwt",
-        re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+    ("sendgrid_key", r"\bSG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}\b", 0),
+    ("mailgun_key", r"\bkey-[a-f0-9]{32}\b", 0),
+    # ── LLM / AI service keys ───────────────────────────────────────────────
+    ("openai_key", r"\bsk-(?:proj-)?[A-Za-z0-9]{20,}\b", 0),
+    ("anthropic_key", r"\bsk-ant-[A-Za-z0-9\-_]{20,}\b", 0),
+    ("huggingface_token", r"\bhf_[A-Za-z0-9]{30,}\b", 0),
+    (
+        "cohere_key",
+        r"(?i)cohere[_\-\s]?(?:api[_\-\s]?)?key\s*[=:]\s*"
+        r"['\"]?([A-Za-z0-9\-_]{40,})['\"]?",
+        0,
     ),
-    # ── .env / config file secrets ────────────────────────────────────────────
-    # Catches KEY=value or KEY="value" patterns for common secret variable names
-    Detector(
+    ("replicate_key", r"\br8_[A-Za-z0-9]{40}\b", 0),
+    # ── Database DSNs ───────────────────────────────────────────────────────
+    ("postgres_dsn", r"postgres(?:ql)?://[^:\s]{1,64}:[^@\s]{1,128}@[^/\s]+/\S+", 0),
+    ("mysql_dsn", r"mysql(?:\+\w+)?://[^:\s]{1,64}:[^@\s]{1,128}@[^/\s]+/\S+", 0),
+    ("mongodb_dsn", r"mongodb(?:\+srv)?://[^:\s]{1,64}:[^@\s]{1,128}@[^\s]+", 0),
+    ("redis_dsn", r"rediss?://(?:[^:\s]{1,64}:[^@\s]{1,128}@)[^\s]+", 0),
+    (
+        "elasticsearch_dsn",
+        r"https?://[^:\s]{1,64}:[^@\s]{1,128}@[^\s]*(?:9200|9300)[^\s]*",
+        0,
+    ),
+    (
+        "sqlserver_dsn",
+        r"(?i)(?:data source|server)\s*=\s*[^;]{1,128};"
+        r".{0,200}?(?:password|pwd)\s*=\s*[^;\s]+",
+        0,
+    ),
+    # ── Generic secrets in code ─────────────────────────────────────────────
+    # api_key: a known vendor prefix OR an explicit api_key= assignment.
+    (
+        "api_key",
+        r"\b(?:sk|rk|pk)_[A-Za-z0-9_]{16,}\b"
+        r"|(?i:(?:api[_\-]?key|apikey)\s*[=:]\s*['\"]?[A-Za-z0-9\-_]{16,}['\"]?)",
+        0,
+    ),
+    # generic_secret: keyword + quoted value (quotes required to avoid noise).
+    (
+        "generic_secret",
+        r"(?i)(?:secret|password|passwd|pwd|token|auth)\s*[=:]\s*"
+        r"['\"]([A-Za-z0-9!@#$%^&*()\-_=+]{8,})['\"]",
+        0,
+    ),
+    ("private_key_block", r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", 0),
+    ("certificate_block", r"-----BEGIN CERTIFICATE-----", 0),
+    ("pgp_private", r"-----BEGIN PGP PRIVATE KEY BLOCK-----", 0),
+    (
+        "bearer_token",
+        r"(?i)bearer\s+([A-Za-z0-9\-_=]+(?:\.[A-Za-z0-9\-_=]+)*)",
+        0,
+    ),
+    (
+        "jwt_token",
+        r"\beyJ[A-Za-z0-9\-_=]{10,}\.[A-Za-z0-9\-_=]{10,}\.[A-Za-z0-9\-_.+/=]{10,}\b",
+        0,
+    ),
+    ("basic_auth_url", r"https?://[^:\s/@]{1,64}:[^@\s/]{1,128}@", 0),
+    (
         "env_secret",
-        re.compile(
-            r"(?i)(?:^|[\s;])"
-            r"(?:PASSWORD|PASSWD|DB_PASS|DB_PASSWORD|SECRET(?:_KEY)?|TOKEN"
-            r"|API_KEY|API_SECRET|ACCESS_TOKEN|AUTH_TOKEN|PRIVATE_KEY"
-            r"|CLIENT_SECRET|MASTER_KEY|ENCRYPTION_KEY)"
-            r"\s*=\s*['\"]?[A-Za-z0-9\-_@#$%^&*]{8,}['\"]?",
-            re.MULTILINE,
-        ),
+        r"^(?:export\s+)?[A-Z_]*(?:SECRET|PASSWORD|TOKEN|KEY|PASS)[A-Z_]*\s*=\s*\S+",
+        re.MULTILINE,
+    ),
+    # ── Infrastructure as Code ──────────────────────────────────────────────
+    ("terraform_state_secret", r'"sensitive_attributes":\s*\[(?:[^\]]*"[^"]*"[^\]]*)+\]', 0),
+    ("docker_auth", r'"auth"\s*:\s*"[A-Za-z0-9+/=]{16,}"', 0),
+    (
+        "k8s_secret_data",
+        r"(?i)kind:\s*Secret[\s\S]{0,200}?data:\s*\n(?:\s+\S+:\s+[A-Za-z0-9+/=]{8,}\n?)+",
+        0,
+    ),
+    # ── PII ─────────────────────────────────────────────────────────────────
+    ("email", r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b", 0),
+    (
+        "phone",
+        r"\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b",
+        0,
+    ),
+    ("ssn", r"\b(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b", 0),
+    # passport: number must follow a "passport" context keyword.
+    (
+        "passport",
+        r"(?i)passport\s*(?:no\.?|number|#)?\s*[:=]?\s*([A-Z]{1,2}\d{6,9})\b",
+        0,
+    ),
+    # ── Healthcare ──────────────────────────────────────────────────────────
+    # npi_number: a 10-digit number with "NPI" present on the same line.
+    ("npi_number", r"(?i)\bnpi\b[^\n]{0,20}?\b\d{10}\b|\b\d{10}\b(?=[^\n]{0,20}?\bnpi\b)", 0),
+    ("dea_number", r"\b[A-Z][A-Z9]\d{7}\b", 0),
+    # icd10_code: code must follow an "ICD" / "ICD-10" context keyword.
+    (
+        "icd10_code",
+        r"(?i)icd[-\s]?(?:10)?[\s:]{0,3}([A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?)\b",
+        0,
+    ),
+    # ── Crypto / Web3 ───────────────────────────────────────────────────────
+    (
+        "ethereum_private_key",
+        r"(?i)(?:eth|ethereum|private)[_\-\s]?key\s*[=:]\s*['\"]?(0x[a-f0-9]{64})['\"]?"
+        r"|\b0x[a-fA-F0-9]{64}\b",
+        0,
+    ),
+    ("bitcoin_private_key_wif", r"\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\b", 0),
+    (
+        "mnemonic_phrase",
+        r"(?i)\b(?:abandon|ability|able|about|above|absent|absorb|abstract|absurd"
+        r"|abuse|access|accident)\b.{0,200}\b(?:zone|zoo)\b",
+        0,
     ),
 ]
 
 
+DETECTORS: list[Detector] = [
+    Detector(name=name, pattern=re.compile(pattern, flags)) for name, pattern, flags in _PATTERNS
+]
+
+
 def stable_mask(detector_name: str, value: str) -> str:
+    """Return a deterministic redaction token for *value*.
+
+    The same value always produces the same token across runs and machines
+    (SHA-256, first 10 hex digits), enabling consistent de-duplication in diff
+    output and audit trails.  Example: ``<AWS_KEY_3d4f9c1a2b>``.
+    """
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:10]
     return f"<{detector_name.upper()}_{digest}>"

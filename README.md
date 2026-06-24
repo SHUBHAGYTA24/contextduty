@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![305 Tests](https://img.shields.io/badge/tests-305%20passing-brightgreen.svg)](#)
+[![359 Tests](https://img.shields.io/badge/tests-359%20passing-brightgreen.svg)](#)
 
 ---
 
@@ -370,7 +370,7 @@ contextduty init   # creates .contextduty.json
 ```json
 {
   "mode": "redact",
-  "detectors": ["email", "phone", "aws_key", "openai_key", "github_pat", "db_dsn"],
+  "detectors": ["email", "phone", "aws_key", "openai_key", "github_pat", "postgres_dsn"],
   "custom_detectors": {},
   "detector_modes": { "aws_key": "block", "openai_key": "block" },
   "allow_patterns": { "email": ["@example\\.com$", "@test\\.internal$"] }
@@ -504,7 +504,7 @@ src/contextduty/
 git clone https://github.com/SHUBHAGYTA24/contextduty
 cd contextduty
 pip install -e ".[dev]"
-make check    # format + lint + 305 tests
+make check    # format + lint + 359 tests
 ```
 
 ---

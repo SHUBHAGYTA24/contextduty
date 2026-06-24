@@ -47,8 +47,6 @@ The moat is **coverage, locality, and enforcement — not detection.** Secrets a
 
 **In one line:** Presidio is the brain; ContextDuty is the firewall — it wires Presidio's detection into git, the IDE, live AI-API traffic, and MCP, and enforces one portable policy across all of them, fully local and open-source.
 
-See [docs/MARKET-ANALYSIS.md](docs/MARKET-ANALYSIS.md) for the market data, sizing, and full competitive analysis.
-
 ---
 
 ## Architecture

@@ -13,7 +13,7 @@
 
 ## What is ContextDuty?
 
-ContextDuty is a **local-first security product** that prevents secrets, API keys, and PII from leaking into AI coding assistants. It works with every AI tool — Cursor, GitHub Copilot, Claude, Windsurf, Cody, Amazon Q — current and future.
+ContextDuty is a **local-first prompt firewall** that prevents secrets, API keys, and PII from leaking into AI coding assistants. It works with every AI tool — Cursor, GitHub Copilot, Claude, Windsurf, Cody, Amazon Q — current and future.
 
 **One install. Every AI tool. Zero cloud dependencies.**
 
@@ -22,6 +22,32 @@ pip install contextduty
 contextduty protect        # blocks secrets from ALL AI tools at once
 contextduty proxy start    # intercepts HTTPS traffic to 21 AI APIs
 ```
+
+> **Detection brain: [Microsoft Presidio](https://github.com/microsoft/presidio).** We don't reinvent PII detection — Presidio is best-in-class and runs locally, so we use it (plus 60 deterministic regex detectors for secrets). ContextDuty is the **enforcement fabric around it** — see [How is this different from Presidio?](#how-is-this-different-from-presidio) below.
+
+---
+
+## How is this different from Presidio?
+
+Presidio is a **detection/anonymization library** — you hand it text, it finds and masks PII. It is deliberately *not* a workflow product; its own docs say "additional systems and protections should be employed." **ContextDuty is that system.**
+
+The moat is **coverage, locality, and enforcement — not detection.** Secrets and PII leak through four doors; every other tool guards one:
+
+| | Microsoft Presidio | GitGuardian `ggshield` | Cloud DLP (Aona/Lasso/Nightfall) | **ContextDuty** |
+|---|---|---|---|---|
+| PII detection | ✅ (we use it) | ❌ | ✅ | ✅ via Presidio |
+| Secret detection | partial | ✅ (secrets only) | ✅ | ✅ (60 detectors) |
+| Git pre-commit hook | ❌ | ✅ | ❌ | ✅ |
+| IDE indexing block (`.cursorignore`…) | ❌ | ❌ | ❌ | ✅ |
+| **Live HTTPS proxy** over AI-API traffic | ❌ | ❌ | browser/network | ✅ |
+| MCP server | ❌ | ❌ | ❌ | ✅ |
+| Portable block/warn/redact **policy** | operators only | limited | cloud console | ✅ (one JSON, all surfaces) |
+| **Local-first — nothing leaves the machine** | ✅ | cloud engine | ❌ (SaaS) | ✅ |
+| Open-source | ✅ | ❌ | ❌ | ✅ (MIT) |
+
+**In one line:** Presidio is the brain; ContextDuty is the firewall — it wires Presidio's detection into git, the IDE, live AI-API traffic, and MCP, and enforces one portable policy across all of them, fully local and open-source.
+
+See [docs/MARKET-ANALYSIS.md](docs/MARKET-ANALYSIS.md) for the market data, sizing, and full competitive analysis.
 
 ---
 

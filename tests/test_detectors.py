@@ -1,4 +1,11 @@
-"""Tests for built-in detectors — each detector must catch what it claims."""
+"""Tests for built-in detectors — each detector must catch what it claims
+without firing on ordinary text.
+
+Driven by ``_CASES``: one entry per detector with positive samples (must
+match) and negative samples (must NOT match).  This keeps the 60-detector
+set honest — adding a detector without a test entry fails
+``test_every_detector_is_covered``.
+"""
 
 from __future__ import annotations
 
@@ -8,513 +15,162 @@ from contextduty.detectors import DETECTORS, stable_mask
 
 DETECTOR_MAP = {d.name: d for d in DETECTORS}
 
+_hex = "a1b2c3d4e5" * 4  # 40 hex chars
 
-# ---------------------------------------------------------------------------
-# Email
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "user@example.com",
-        "jane.doe+tag@corp.co.uk",
-        "admin@sub.domain.org",
-    ],
-)
-def test_email_matches(value):
-    assert DETECTOR_MAP["email"].pattern.search(value)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "notanemail",
-        "@missinglocal.com",
-        "missing@",
-    ],
-)
-def test_email_no_false_positives(value):
-    assert not DETECTOR_MAP["email"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# Phone
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "555-867-5309",
-        "(800) 555-1212",
-        "+1 415 555 2671",
-    ],
-)
-def test_phone_matches(value):
-    assert DETECTOR_MAP["phone"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# API key (generic sk_/rk_/pk_ style)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "sk_live_ABCDEFGHIJ1234567890",
-        "rk_test_abcdefghijklmnop",
-        "pk_prod_XXXXXXXXXXXXXXXX",
-    ],
-)
-def test_api_key_matches(value):
-    assert DETECTOR_MAP["api_key"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# Bearer token
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig",
-        "bearer sometoken123",
-        "BEARER UPPERCASETOKEN",
-    ],
-)
-def test_bearer_token_matches(value):
-    assert DETECTOR_MAP["bearer_token"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# AWS key ID
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "AKIA1234567890ABCDEF",
-        "AKIAIOSFODNN7EXAMPLE",
-    ],
-)
-def test_aws_key_matches(value):
-    assert DETECTOR_MAP["aws_key"].pattern.search(value)
-
-
-def test_aws_key_wrong_prefix():
-    assert not DETECTOR_MAP["aws_key"].pattern.search("BKIA1234567890ABCDEF")
-
-
-# ---------------------------------------------------------------------------
-# AWS secret access key
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    ],
-)
-def test_aws_secret_matches(value):
-    assert DETECTOR_MAP["aws_secret"].pattern.search(value)
+# detector -> (positives, negatives)
+_CASES: dict[str, tuple[list[str], list[str]]] = {
+    # ── Cloud / Infrastructure ──────────────────────────────────────────────
+    "aws_key": (["AKIA1234567890ABCDEF"], ["BKIA1234567890ABCDEF", "AKIA123"]),
+    "aws_secret": (
+        ["AWS_SECRET_ACCESS_KEY=" + "a" * 40],
+        ["AWS_SECRET_ACCESS_KEY=short"],
+    ),
+    "aws_mfa_serial": (["arn:aws:iam::123456789012:mfa/jdoe"], ["arn:aws:s3:::bucket"]),
+    "gcp_service_account": (['"type": "service_account"'], ['"type": "user"']),
+    "gcp_api_key": (["AIza" + "B" * 35], ["AIzashort"]),
+    "azure_client_secret": (
+        ["azure_client_secret=" + "x" * 40],
+        ["azure_client_secret=short"],
+    ),
+    "azure_storage_key": (
+        ["DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=" + "B" * 86 + "=="],
+        ["DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=short"],
+    ),
+    # ── VCS / CI ────────────────────────────────────────────────────────────
+    "github_pat": (["ghp_" + "a" * 36], ["ghp_short", "ghx_" + "a" * 36]),
+    "github_oauth": (["gho_" + "a" * 36], ["gho_short"]),
+    "github_app_token": (["ghs_" + "a" * 36], ["ghs_short"]),
+    "github_refresh_token": (["ghr_" + "a" * 40], ["ghr_short"]),
+    "gitlab_pat": (["glpat-" + "a" * 20], ["glpat-short"]),
+    "gitlab_runner_token": (["glrt-" + "a" * 20], ["glrt-short"]),
+    # ── Payment / Fintech ───────────────────────────────────────────────────
+    "stripe_secret": (["sk_live_" + "a" * 24], ["sk_live_short"]),
+    "stripe_restricted": (["rk_test_" + "a" * 24], ["rk_test_short"]),
+    "stripe_publishable": (["pk_live_" + "a" * 24], ["pk_live_short"]),
+    "stripe_webhook": (["whsec_" + "a" * 32], ["whsec_short"]),
+    "paypal_secret": (["paypal_client_secret=" + "a" * 32], ["paypal_client_secret=short"]),
+    "credit_card": (["4111111111111111", "378282246310005"], ["1234567890123456"]),
+    # ── Messaging / Comms ───────────────────────────────────────────────────
+    "slack_bot_token": (
+        ["xoxb-1234567890-1234567890-" + "a" * 24],
+        ["xoxz-1234567890-notaslacktoken"],
+    ),
+    "slack_user_token": (["xoxp-1234567890-1234567890-1234567890-" + "a" * 32], ["xoxp-short"]),
+    "slack_workspace_token": (
+        ["xoxa-2-1234567890-1234567890-1234567890-" + "a" * 16],
+        ["xoxa-2-short"],
+    ),
+    "slack_config_token": (["xoxe.xoxb-1-" + "A" * 120], ["xoxe.xoxb-1-short"]),
+    "twilio_account_sid": (["AC" + "a" * 32], ["BC" + "a" * 32]),
+    "twilio_auth_token": (["twilio_auth_token=" + "a" * 32], ["twilio_auth_token=short"]),
+    "sendgrid_key": (["SG." + "a" * 22 + "." + "b" * 43], ["SG.tooshort.alsoShort"]),
+    "mailgun_key": (["key-" + "a1b2c3d4" * 4], ["key-short"]),
+    # ── AI / ML ─────────────────────────────────────────────────────────────
+    "openai_key": (["sk-" + "a" * 32, "sk-proj-" + "b" * 32], ["sk-short"]),
+    "anthropic_key": (["sk-ant-" + "a" * 30], ["sk-ant-short"]),
+    "huggingface_token": (["hf_" + "a" * 34], ["hf_tooshort"]),
+    "cohere_key": (["cohere_api_key=" + "a" * 40], ["cohere_api_key=short"]),
+    "replicate_key": (["r8_" + "a" * 40], ["r8_short"]),
+    # ── Database DSNs ───────────────────────────────────────────────────────
+    "postgres_dsn": (["postgresql://user:pass@host:5432/db"], ["postgresql://host/db"]),
+    "mysql_dsn": (["mysql://user:pass@host:3306/db"], ["mysql://host/db"]),
+    "mongodb_dsn": (["mongodb+srv://user:pass@cluster.mongodb.net"], ["mongodb://host"]),
+    "redis_dsn": (["redis://user:pass@host:6379"], ["redis://host:6379"]),
+    "elasticsearch_dsn": (["https://user:pass@es-host:9200"], ["https://es-host:9200"]),
+    "sqlserver_dsn": (
+        ["Server=tcp:host,1433;Database=db;User Id=sa;Password=secret;"],
+        ["Server=tcp:host,1433;Database=db;"],
+    ),
+    # ── Generic secrets ─────────────────────────────────────────────────────
+    "api_key": (
+        ["sk_" + "a" * 16, 'api_key="' + "a" * 20 + '"', "apikey=" + "b" * 16],
+        ["api_key=short", "just a sentence with sixteen letters here"],
+    ),
+    "generic_secret": (['password="hunter2hunter2"'], ["password=unquotedvalue"]),
+    "private_key_block": (["-----BEGIN RSA PRIVATE KEY-----"], ["-----BEGIN RSA PUBLIC KEY-----"]),
+    "certificate_block": (["-----BEGIN CERTIFICATE-----"], ["-----BEGIN PUBLIC KEY-----"]),
+    "pgp_private": (["-----BEGIN PGP PRIVATE KEY BLOCK-----"], ["-----BEGIN PGP PUBLIC KEY-----"]),
+    "bearer_token": (["Authorization: Bearer abc123.def456"], ["Authorization: Basic abc"]),
+    "jwt_token": (
+        ["eyJ" + "a" * 12 + "." + "b" * 12 + "." + "c" * 12],
+        ["eyJshort.abc"],
+    ),
+    "basic_auth_url": (["https://user:pass@example.com"], ["https://example.com"]),
+    "env_secret": (["API_TOKEN=supersecretvalue", "export DB_PASSWORD=hunter2"], ["NAME=alice"]),
+    # ── Infrastructure as Code ──────────────────────────────────────────────
+    "terraform_state_secret": (
+        ['"sensitive_attributes": ["password"]'],
+        ['"sensitive_attributes": []'],
+    ),
+    "docker_auth": (['"auth": "' + "a" * 24 + '"'], ['"auth": "short"']),
+    "k8s_secret_data": (
+        ["kind: Secret\nmetadata:\n  name: db\ndata:\n  password: " + "a" * 12 + "\n"],
+        ["kind: ConfigMap\ndata:\n  key: value\n"],
+    ),
+    # ── PII ─────────────────────────────────────────────────────────────────
+    "email": (["user@example.com", "jane.doe+tag@corp.co.uk"], ["notanemail", "missing@"]),
+    "phone": (["+1 (555) 123-4567", "555-123-4567"], ["12345"]),
+    "ssn": (["123-45-6789"], ["000-12-3456", "123-456-789"]),
+    "passport": (["passport: AB1234567"], ["AB1234567"]),
+    # ── Healthcare ──────────────────────────────────────────────────────────
+    "npi_number": (["NPI: 1234567890", "provider 1234567890 (NPI)"], ["1234567890"]),
+    "dea_number": (["AB1234567"], ["A1234567"]),
+    "icd10_code": (["ICD-10: E11.9", "icd10 J45"], ["E11.9"]),
+    # ── Crypto / Web3 ─────────────────────────────────────────────────────────
+    "ethereum_private_key": (["0x" + _hex + _hex[:24]], ["0xshort"]),
+    "bitcoin_private_key_wif": (["5" + "K" * 51], ["5short"]),
+    "mnemonic_phrase": (["abandon ability able about above absent zone"], ["just normal words"]),
+}
 
 
-def test_aws_secret_no_match_short():
-    assert not DETECTOR_MAP["aws_secret"].pattern.search("AWS_SECRET_ACCESS_KEY=short")
+@pytest.mark.parametrize("name", sorted(_CASES))
+def test_detector_positive_samples(name):
+    pattern = DETECTOR_MAP[name].pattern
+    positives, _ = _CASES[name]
+    for sample in positives:
+        assert pattern.search(sample), f"{name} failed to match: {sample!r}"
 
 
-# ---------------------------------------------------------------------------
-# GCP service account
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("name", sorted(_CASES))
+def test_detector_negative_samples(name):
+    pattern = DETECTOR_MAP[name].pattern
+    _, negatives = _CASES[name]
+    for sample in negatives:
+        assert not pattern.search(sample), f"{name} false-positive on: {sample!r}"
 
 
-def test_gcp_service_account_matches():
-    assert DETECTOR_MAP["gcp_service_account"].pattern.search('"type": "service_account"')
-    assert DETECTOR_MAP["gcp_service_account"].pattern.search(
-        '{"type":"service_account","project_id":"my-project"}'
-    )
+def test_every_detector_is_covered():
+    """Every built-in detector must have a test case (no silent gaps)."""
+    covered = set(_CASES)
+    actual = {d.name for d in DETECTORS}
+    missing = sorted(actual - covered)
+    extra = sorted(covered - actual)
+    assert not missing, f"detectors with no test case: {missing}"
+    assert not extra, f"test cases for missing detectors: {extra}"
 
 
-def test_gcp_service_account_no_false_positive():
-    assert not DETECTOR_MAP["gcp_service_account"].pattern.search('"type": "user"')
+def test_detector_count_is_sixty():
+    assert len(DETECTORS) == 60
 
 
-# ---------------------------------------------------------------------------
-# GitHub PAT
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "ghp_" + "A" * 36,  # classic PAT
-        "gho_" + "B" * 36,  # OAuth
-        "ghu_" + "C" * 36,  # user-to-server
-        "ghs_" + "D" * 36,  # server-to-server
-        "ghr_" + "E" * 36,  # refresh
-        "github_pat_" + "F" * 82,  # fine-grained PAT
-    ],
-)
-def test_github_pat_matches(value):
-    assert DETECTOR_MAP["github_pat"].pattern.search(value)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "ghp_short",
-        "ghy_" + "A" * 36,  # unknown prefix
-    ],
-)
-def test_github_pat_no_false_positives(value):
-    assert not DETECTOR_MAP["github_pat"].pattern.search(value)
+def test_detector_names_unique():
+    names = [d.name for d in DETECTORS]
+    assert len(names) == len(set(names))
 
 
 # ---------------------------------------------------------------------------
-# OpenAI key
+# stable_mask
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "sk-" + "a" * 48,
-        "sk-proj-" + "b" * 48,
-    ],
-)
-def test_openai_key_matches(value):
-    assert DETECTOR_MAP["openai_key"].pattern.search(value)
-
-
-def test_openai_key_no_match_short():
-    assert not DETECTOR_MAP["openai_key"].pattern.search("sk-short")
-
-
-# ---------------------------------------------------------------------------
-# Anthropic key
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "sk-ant-api03-" + "x" * 40,
-        "sk-ant-" + "y" * 30,
-    ],
-)
-def test_anthropic_key_matches(value):
-    assert DETECTOR_MAP["anthropic_key"].pattern.search(value)
-
-
-def test_anthropic_key_no_match_short():
-    assert not DETECTOR_MAP["anthropic_key"].pattern.search("sk-ant-short")
-
-
-# ---------------------------------------------------------------------------
-# HuggingFace token
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "hf_" + "a" * 37,
-        "hf_" + "Z" * 40,
-    ],
-)
-def test_huggingface_token_matches(value):
-    assert DETECTOR_MAP["huggingface_token"].pattern.search(value)
-
-
-def test_huggingface_token_no_match_short():
-    assert not DETECTOR_MAP["huggingface_token"].pattern.search("hf_tooshort")
-
-
-# ---------------------------------------------------------------------------
-# Slack token
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "xoxb-1234567890-9876543210-" + "A" * 24,  # bot token
-        "xoxp-1234567890-9876543210-1234567890-" + "a" * 32,  # user token
-    ],
-)
-def test_slack_token_matches(value):
-    assert DETECTOR_MAP["slack_token"].pattern.search(value)
-
-
-def test_slack_token_no_match_wrong_prefix():
-    assert not DETECTOR_MAP["slack_token"].pattern.search("xoxz-1234567890-notaslacktoken")
-
-
-# ---------------------------------------------------------------------------
-# Stripe webhook
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "whsec_" + "a" * 32,
-        "whsec_" + "X" * 48,
-    ],
-)
-def test_stripe_webhook_matches(value):
-    assert DETECTOR_MAP["stripe_webhook"].pattern.search(value)
-
-
-def test_stripe_webhook_no_match_short():
-    assert not DETECTOR_MAP["stripe_webhook"].pattern.search("whsec_tooshort")
-
-
-# ---------------------------------------------------------------------------
-# SendGrid key
-# ---------------------------------------------------------------------------
-
-
-def test_sendgrid_key_matches():
-    key = "SG." + "A" * 22 + "." + "B" * 43
-    assert DETECTOR_MAP["sendgrid_key"].pattern.search(key)
-
-
-def test_sendgrid_key_no_match_wrong_format():
-    assert not DETECTOR_MAP["sendgrid_key"].pattern.search("SG.tooshort.alsoShort")
-
-
-# ---------------------------------------------------------------------------
-# Mailchimp key
-# ---------------------------------------------------------------------------
-
-
-def test_mailchimp_key_matches():
-    assert DETECTOR_MAP["mailchimp_key"].pattern.search("a" * 32 + "-us1")
-    assert DETECTOR_MAP["mailchimp_key"].pattern.search("b" * 32 + "-us21")
-
-
-def test_mailchimp_key_no_match_wrong_format():
-    assert not DETECTOR_MAP["mailchimp_key"].pattern.search("tooshort-us1")
-
-
-# ---------------------------------------------------------------------------
-# npm token
-# ---------------------------------------------------------------------------
-
-
-def test_npm_token_matches():
-    assert DETECTOR_MAP["npm_token"].pattern.search("npm_" + "a" * 36)
-
-
-def test_npm_token_no_match_short():
-    assert not DETECTOR_MAP["npm_token"].pattern.search("npm_tooshort")
-
-
-# ---------------------------------------------------------------------------
-# Twilio SID
-# ---------------------------------------------------------------------------
-
-
-def test_twilio_sid_matches():
-    assert DETECTOR_MAP["twilio_sid"].pattern.search("AC" + "a" * 32)
-
-
-def test_twilio_sid_no_match_wrong_prefix():
-    assert not DETECTOR_MAP["twilio_sid"].pattern.search("BC" + "a" * 32)
-
-
-# ---------------------------------------------------------------------------
-# Azure storage key
-# ---------------------------------------------------------------------------
-
-
-def test_azure_storage_key_matches():
-    key = "DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=" + "A" * 86 + "==;"
-    assert DETECTOR_MAP["azure_storage_key"].pattern.search(key)
-
-
-def test_azure_storage_key_no_match_incomplete():
-    assert not DETECTOR_MAP["azure_storage_key"].pattern.search(
-        "DefaultEndpointsProtocol=https;AccountName=myaccount;"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Google OAuth token
-# ---------------------------------------------------------------------------
-
-
-def test_google_oauth_token_matches():
-    token = "ya29." + "a" * 60
-    assert DETECTOR_MAP["google_oauth_token"].pattern.search(token)
-
-
-def test_google_oauth_token_no_match_short():
-    assert not DETECTOR_MAP["google_oauth_token"].pattern.search("ya29.short")
-
-
-# ---------------------------------------------------------------------------
-# Database DSN
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "postgresql://user:password@localhost:5432/mydb",
-        "postgres://admin:s3cr3t@db.example.com/prod",
-        "mysql://root:hunter2@127.0.0.1:3306/app",
-        "mongodb://user:pass@cluster.example.com/db",
-        "mongodb+srv://user:pass@cluster.example.mongodb.net/",
-        "redis://user:password@redis.example.com:6379/0",
-    ],
-)
-def test_db_dsn_matches(value):
-    assert DETECTOR_MAP["db_dsn"].pattern.search(value)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "postgresql://localhost/mydb",  # no credentials
-        "redis://redis.example.com:6379",  # no credentials
-        "https://user:pass@example.com",  # HTTP, not DB
-    ],
-)
-def test_db_dsn_no_false_positives(value):
-    assert not DETECTOR_MAP["db_dsn"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# SSH private key
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "header",
-    [
-        "-----BEGIN RSA PRIVATE KEY-----",
-        "-----BEGIN EC PRIVATE KEY-----",
-        "-----BEGIN DSA PRIVATE KEY-----",
-        "-----BEGIN OPENSSH PRIVATE KEY-----",
-        "-----BEGIN PRIVATE KEY-----",
-    ],
-)
-def test_ssh_private_key_matches(header):
-    # ssh_private_key catches RSA/DSA/EC/OPENSSH; private_key_pem catches bare PKCS#8
-    det = "private_key_pem" if header == "-----BEGIN PRIVATE KEY-----" else "ssh_private_key"
-    assert DETECTOR_MAP[det].pattern.search(header)
-
-
-def test_ssh_private_key_no_match_public_key():
-    assert not DETECTOR_MAP["ssh_private_key"].pattern.search("-----BEGIN RSA PUBLIC KEY-----")
-
-
-# ---------------------------------------------------------------------------
-# PGP private key
-# ---------------------------------------------------------------------------
-
-
-def test_pgp_private_key_matches():
-    assert DETECTOR_MAP["pgp_private_key"].pattern.search("-----BEGIN PGP PRIVATE KEY BLOCK-----")
-
-
-def test_pgp_private_key_no_match_public():
-    assert not DETECTOR_MAP["pgp_private_key"].pattern.search(
-        "-----BEGIN PGP PUBLIC KEY BLOCK-----"
-    )
-
-
-# ---------------------------------------------------------------------------
-# JWT
-# ---------------------------------------------------------------------------
-
-
-def test_jwt_matches():
-    # well-formed JWT: header.payload.signature all base64url
-    token = (
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-        ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
-        ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-    )
-    assert DETECTOR_MAP["jwt"].pattern.search(token)
-
-
-def test_jwt_no_match_plain_text():
-    assert not DETECTOR_MAP["jwt"].pattern.search("not.a.jwt")
-
-
-# ---------------------------------------------------------------------------
-# .env secret
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "PASSWORD=supersecret123",
-        "SECRET_KEY=abc123def456ghi",
-        "API_KEY=some-long-api-key-value",
-        "ACCESS_TOKEN=mytoken12345678",
-        "CLIENT_SECRET=clientsecretvalue",
-    ],
-)
-def test_env_secret_matches(value):
-    assert DETECTOR_MAP["env_secret"].pattern.search(value)
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "PASSWORD=short",  # too short (< 8 chars)
-        "NOT_A_SECRET=value",  # key not in allowlist
-    ],
-)
-def test_env_secret_no_false_positives(value):
-    assert not DETECTOR_MAP["env_secret"].pattern.search(value)
-
-
-# ---------------------------------------------------------------------------
-# Stable mask
-# ---------------------------------------------------------------------------
-
-
-def test_stable_mask_is_deterministic():
-    a = stable_mask("email", "user@example.com")
-    b = stable_mask("email", "user@example.com")
-    assert a == b
-
-
-def test_stable_mask_different_values_differ():
-    a = stable_mask("email", "alice@example.com")
-    b = stable_mask("email", "bob@example.com")
-    assert a != b
 
 
 def test_stable_mask_format():
-    mask = stable_mask("api_key", "sk_live_abc")
-    assert mask.startswith("<API_KEY_")
-    assert mask.endswith(">")
+    mask = stable_mask("aws_key", "AKIA1234567890ABCDEF")
+    assert mask.startswith("<AWS_KEY_") and mask.endswith(">")
 
 
-# ---------------------------------------------------------------------------
-# Detector coverage sanity check
-# ---------------------------------------------------------------------------
+def test_stable_mask_deterministic():
+    assert stable_mask("email", "a@b.com") == stable_mask("email", "a@b.com")
 
 
-def test_detector_count_at_least_25():
-    """Ensure we have meaningful coverage — fail loudly if someone deletes patterns."""
-    assert len(DETECTORS) >= 25, f"Expected ≥25 detectors, got {len(DETECTORS)}"
-
-
-def test_all_detectors_have_unique_names():
-    names = [d.name for d in DETECTORS]
-    assert len(names) == len(set(names)), "Duplicate detector names found"
+def test_stable_mask_distinct_values():
+    assert stable_mask("email", "a@b.com") != stable_mask("email", "x@y.com")

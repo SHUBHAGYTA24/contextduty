@@ -55,7 +55,7 @@ Creates `.contextduty.json` in the current directory with sensible defaults:
 ```json
 {
   "mode": "redact",
-  "detectors": ["email", "phone", "aws_key", "openai_key", "github_pat", "db_dsn"],
+  "detectors": ["email", "phone", "aws_key", "openai_key", "github_pat", "postgres_dsn"],
   "custom_detectors": {},
   "detector_modes": {},
   "allow_patterns": {}

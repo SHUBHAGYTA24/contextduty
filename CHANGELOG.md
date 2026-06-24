@@ -21,10 +21,10 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 - Dashboard dark theme is now the default; light theme available via toggle (preference persisted in `localStorage`)
 - Activity table header is now sticky within the scroll container — stays visible while scrolling through 50+ entries
 - `_aggregate()` now returns `detection_methods` (regex/nlp split) and `target_totals` (top 10 files by finding count)
-- Test count: 258 → 305
+- Test count: 258 → 359
 
 ### Stats
-- 305 tests
+- 359 tests
 - 60 built-in detectors
 - 21 AI API endpoints intercepted
 - 6 AI tool ignore files

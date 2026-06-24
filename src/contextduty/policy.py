@@ -32,46 +32,77 @@ class Policy:
 DEFAULT_POLICY: dict[str, Any] = {
     "mode": "redact",
     "detectors": [
-        # PII
-        "email",
-        "phone",
-        # Generic tokens
-        "api_key",
-        "bearer_token",
-        # Cloud provider keys
+        # Cloud / Infrastructure
         "aws_key",
         "aws_secret",
+        "aws_mfa_serial",
         "gcp_service_account",
-        # VCS platform tokens
+        "gcp_api_key",
+        "azure_client_secret",
+        "azure_storage_key",
+        # VCS / CI tokens
         "github_pat",
+        "github_oauth",
+        "github_app_token",
+        "github_refresh_token",
+        "gitlab_pat",
+        "gitlab_runner_token",
+        # Payment / Fintech
+        "stripe_secret",
+        "stripe_restricted",
+        "stripe_publishable",
+        "stripe_webhook",
+        "paypal_secret",
+        "credit_card",
+        # Messaging / Comms
+        "slack_bot_token",
+        "slack_user_token",
+        "slack_workspace_token",
+        "slack_config_token",
+        "twilio_account_sid",
+        "twilio_auth_token",
+        "sendgrid_key",
+        "mailgun_key",
         # AI / ML service keys
         "openai_key",
         "anthropic_key",
         "huggingface_token",
-        # Communication platforms
-        "slack_token",
-        # Payment / SaaS platforms
-        "stripe_webhook",
-        "sendgrid_key",
-        "mailchimp_key",
-        # Package registries
-        "npm_token",
-        # Telephony
-        "twilio_sid",
-        # Azure
-        "azure_storage_key",
-        # Google OAuth
-        "google_oauth_token",
-        # Database connection strings
-        "db_dsn",
-        # Cryptographic material
-        "ssh_private_key",
-        "pgp_private_key",
-        "private_key_pem",
-        # JWTs
-        "jwt",
-        # .env / config file secrets
+        "cohere_key",
+        "replicate_key",
+        # Database DSNs
+        "postgres_dsn",
+        "mysql_dsn",
+        "mongodb_dsn",
+        "redis_dsn",
+        "elasticsearch_dsn",
+        "sqlserver_dsn",
+        # Generic secrets
+        "api_key",
+        "generic_secret",
+        "private_key_block",
+        "certificate_block",
+        "pgp_private",
+        "bearer_token",
+        "jwt_token",
+        "basic_auth_url",
         "env_secret",
+        # Infrastructure as Code
+        "terraform_state_secret",
+        "docker_auth",
+        "k8s_secret_data",
+        # PII
+        "email",
+        "phone",
+        "ssn",
+        "passport",
+        # Healthcare
+        "npi_number",
+        "dea_number",
+        "icd10_code",
+        # Crypto / Web3
+        "ethereum_private_key",
+        "bitcoin_private_key_wif",
+        "mnemonic_phrase",
     ],
     "custom_detectors": {},
     "detector_modes": {},

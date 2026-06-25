@@ -17,6 +17,12 @@ contextduty protect          # stop all AI tools from indexing your secrets
 contextduty install-hooks    # block commits that contain secrets
 ```
 
+![ContextDuty — git hook, live AI-traffic proxy, IDE block, and MCP in action](demo/contextduty-firewall.gif)
+
+> Presidio detects PII in a string. ContextDuty **enforces** it on the wire —
+> a paste-box can't block your commit, redact your live `api.openai.com`
+> traffic, or sanitize an MCP tool call. This is what that looks like.
+
 ---
 
 ## Why

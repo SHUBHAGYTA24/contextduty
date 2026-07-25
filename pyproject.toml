@@ -46,7 +46,7 @@ Changelog = "https://github.com/SHUBHAGYTA24/contextduty/blob/main/CHANGELOG.md"
 [project.scripts]
 contextduty = "contextduty.cli:main"
 contextduty-mcp = "contextduty.mcp_server:main"
-contextduty-dashboard = "contextduty.cli:main"
+contextduty-dashboard = "contextduty.cli:main_dashboard"
 contextduty-pre-commit = "contextduty.hooks:main_pre_commit"
 
 [tool.setuptools]

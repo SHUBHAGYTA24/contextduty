@@ -15,6 +15,33 @@ To sign: open your pull request, then add a comment with this exact line:
 
 (A CLA-assistant bot may automate this check on your PR.)
 
+## Developer Certificate of Origin (sign your commits)
+
+Every commit must be **signed off** to certify you have the right to submit it
+under the [Developer Certificate of Origin](https://developercertificate.org)
+(DCO). This is a lightweight, per-commit assertion — not a copyright transfer.
+
+Add the sign-off automatically with the `-s` flag:
+
+```bash
+git commit -s -m "your message"
+```
+
+This appends a trailer to the commit message:
+
+```
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+The name/email must match the commit author. If you forgot:
+
+```bash
+git commit --amend -s        # fix the most recent commit
+git rebase --signoff <base>  # sign off a range of commits
+```
+
+A CI check (`DCO`) verifies every commit in a pull request is signed off.
+
 ## Get started in 3 steps
 
 ```bash

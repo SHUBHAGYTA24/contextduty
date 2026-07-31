@@ -49,6 +49,7 @@ def get_active_network_service() -> str:
             if line and not line.startswith("*") and "asterisk" not in line.lower():
                 return line
     except FileNotFoundError:
+        # networksetup not present (non-macOS or trimmed env) — fall back below.
         pass
     return "Wi-Fi"
 

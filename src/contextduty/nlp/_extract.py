@@ -14,22 +14,27 @@ import re
 # Compiled patterns (module-level for reuse)
 # ---------------------------------------------------------------------------
 
+# Single/double-quoted bodies use the "unrolled loop" form
+# (`[^"\\]*(?:\\.[^"\\]*)*`), which is guaranteed linear — no catastrophic
+# backtracking on strings with many escaped quotes.
 _STRING_LITERAL = re.compile(
     r"(?:"
     r'"""[\s\S]*?"""|'  # triple-double-quoted
     r"'''[\s\S]*?'''|"  # triple-single-quoted
     r'f"""[\s\S]*?"""|'  # f-string triple-double
     r"f'''[\s\S]*?'''|"  # f-string triple-single
-    r'"(?:[^"\\]|\\.)*"|'  # double-quoted
-    r"'(?:[^'\\]|\\.)*'"  # single-quoted
+    r'"[^"\\]*(?:\\.[^"\\]*)*"|'  # double-quoted
+    r"'[^'\\]*(?:\\.[^'\\]*)*'"  # single-quoted
     r")"
 )
 
+# Comment bodies use `[ \t]*` (not `\s*`) and a single greedy capture (no lazy
+# `.*?$` overlap), so there is no polynomial backtracking on padded lines.
 _COMMENT_LINE = re.compile(
     r"(?:"
-    r"#\s*(.*?)$|"  # Python / Ruby / Shell
-    r"//\s*(.*?)$|"  # JS / Java / Go / Rust
-    r"/\*\s*([\s\S]*?)\s*\*/"  # Block comments
+    r"#[ \t]*(.*)|"  # Python / Ruby / Shell
+    r"//[ \t]*(.*)|"  # JS / Java / Go / Rust
+    r"/\*([\s\S]*?)\*/"  # Block comments
     r")",
     re.MULTILINE,
 )

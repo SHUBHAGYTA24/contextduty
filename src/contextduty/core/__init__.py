@@ -11,6 +11,8 @@ Public API:
     from contextduty.core import ContextDutyError
 """
 
+from typing import TYPE_CHECKING
+
 from .exceptions import (
     CertificateError,
     ContextDutyError,
@@ -23,6 +25,20 @@ from .exceptions import (
     ProxyNotInstalledError,
     ScanError,
 )
+
+if TYPE_CHECKING:
+    # Provided lazily at runtime via __getattr__ (below) to avoid a circular
+    # import with engine/policy. Declaring them here makes the names resolvable
+    # to type checkers and static analysis without creating the import cycle.
+    from ..engine import (  # noqa: F401
+        Finding,
+        ScanResult,
+        redact_file,
+        report_to_json,
+        scan_dir,
+        scan_file,
+    )
+    from ..policy import Policy, load_policy  # noqa: F401
 
 
 def __getattr__(name: str):  # noqa: C901

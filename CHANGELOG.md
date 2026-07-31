@@ -7,6 +7,57 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.1.0] — unreleased
+
+### Added
+- **Team reporting + enrollment** — `contextduty team enroll` writes a `report_to`
+  target into a repo's policy; scans and hook events then emit **metadata-only**
+  heartbeats to a self-hosted collector (fire-and-forget, flushed at process exit)
+- **`--no-verify` bypass detection** — the git post-commit hook observes when the
+  pre-commit scan was skipped and reports a metadata-only bypass event to the fleet feed
+- **Signed central policy distribution** — `extends` accepts an HTTPS URL with a
+  SHA-256 integrity pin (`{"url", "sha256"}`); `http://` is rejected (override with
+  `CONTEXTDUTY_ALLOW_INSECURE_POLICY=1`), so a tampered baseline can't loosen rules
+- Plain-English team pitch + one-command live demo (`demo/team-pitch.md`, `demo/team_demo.sh`)
+
+### Changed
+- README documents the team layer, live-key verification, and signed policy distribution;
+  test badge 403 → 407
+
+### Stats
+- 407 tests
+
+---
+
+## [2.0.0] — 2026-07-31
+
+Major release: adds a team control plane and hardens detection precision. The
+detection **brain remains Microsoft Presidio**; this release deepens the
+enforcement fabric around it.
+
+### Added
+- **Team layer (self-hosted, metadata-only)** — `contextduty team serve` runs a
+  stdlib fleet collector + dashboard showing coverage (live vs. dark endpoints),
+  leaks prevented, top detectors, and a bypass feed. Endpoints report **counts and
+  metadata only**; the sanitizer allow-lists fields in code so raw values, file
+  contents, and masked tokens never leave the developer's machine
+- **Opt-in live-key verification** (`contextduty scan --verify`) — a read-only call
+  to a credential's *own* provider (GitHub / OpenAI / Stripe / Slack) distinguishes
+  active secrets from revoked ones; never phones home to ContextDuty
+- **OpenSSF Best Practices Baseline** artifacts (`SECURITY.md` disclosure policy,
+  `GOVERNANCE.md`, `THREAT_MODEL.md`, `ARCHITECTURE.md`, `DEPENDENCIES.md`, CLA/DCO)
+- Signed releases — Sigstore signatures + CycloneDX SBOM attached to every GitHub Release
+
+### Changed
+- **Detection precision** — `credit_card` now requires a valid Luhn checksum,
+  `dea_number` requires a valid check digit, and the bare `0x<64 hex>`
+  `ethereum_private_key` branch was dropped, cutting false positives
+- **Release automation** — version is derived from git tags via setuptools-scm
+  (`dynamic = ["version"]`); a one-click Release workflow bumps → tags → publishes to PyPI
+- All CodeQL alerts resolved (bounded regex quantifiers, explicit `__all__` exports)
+
+---
+
 ## [1.0.0] — 2026-06-24
 
 First stable release. Supersedes the unreleased 0.3.0 work (never published to

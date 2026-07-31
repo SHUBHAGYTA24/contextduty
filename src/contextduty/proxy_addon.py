@@ -47,3 +47,12 @@ def _inject_texts(body, texts, host):
 
 # Entry point for `mitmdump -s proxy_addon.py`
 addons = [ContextDutyAddon()]
+
+__all__ = [
+    "ContextDutyAddon",
+    "_block_response",
+    "AI_HOSTS",
+    "PROMPT_PATHS",
+    "is_prompt_request",
+    "_is_prompt_request",
+]

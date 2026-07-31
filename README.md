@@ -183,7 +183,7 @@ contextduty dashboard          # reads ~/.contextduty/audit.jsonl
 | `contextduty protect [watch\|status]` | Write/auto-update ignore files for all 6 AI tools |
 | `contextduty install-hooks` / `uninstall-hooks` | Manage the git pre-commit hook |
 | `contextduty proxy [setup\|start\|stop\|status]` | Manage the HTTPS interception proxy |
-| `contextduty scan <file\|dir> [--nlp]` | Scan and print JSON findings |
+| `contextduty scan <file\|dir> [--nlp] [--verify]` | Scan and print JSON findings (`--verify` checks if found keys are live) |
 | `contextduty redact --in <f> --out <f>` | Write a redacted copy |
 | `contextduty dashboard` / `report` | Audit dashboard / log summary |
 | `contextduty policy validate` | Validate and resolve a layered policy |

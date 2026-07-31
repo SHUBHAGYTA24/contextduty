@@ -54,6 +54,15 @@ def _parser() -> argparse.ArgumentParser:
         default="auto",
         help="NLP backend: presidio (recommended), spacy, or auto-detect (default: auto).",
     )
+    scan_parser.add_argument(
+        "--verify",
+        action="store_true",
+        help=(
+            "Check whether found credentials are LIVE by querying each one's own "
+            "provider (GitHub, OpenAI, Stripe, Slack). Opt-in — makes network calls; "
+            "the credential is sent only to its issuing provider."
+        ),
+    )
 
     # ── redact ────────────────────────────────────────────────────────────────
     redact_parser = subparsers.add_parser("redact", help="Redact risky data from an input file.")
@@ -293,6 +302,19 @@ def main() -> None:  # noqa: C901
                     "  pip install contextduty[nlp]        # spaCy fallback",
                     file=sys.stderr,
                 )
+        # Live-key verification (optional, opt-in — makes network calls)
+        if getattr(args, "verify", False) and target.is_file():
+            from .verify import ACTIVE, INACTIVE, verify_findings
+
+            text = target.read_text(encoding="utf-8", errors="replace")
+            checks = verify_findings(text, policy)
+            if checks:
+                icons = {ACTIVE: "🔴 LIVE", INACTIVE: "⚪ inactive"}
+                print("\n🔑 Live-key verification:")
+                for det, status in checks:
+                    print(f"  • {det}: {icons.get(status, '❓ ' + status)}")
+            else:
+                print("\n🔑 Live-key verification: no verifiable credentials found")
         if args.report:
             Path(args.report).write_text(report + "\n", encoding="utf-8")
         if args.audit_log:

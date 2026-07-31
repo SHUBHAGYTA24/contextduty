@@ -7,6 +7,17 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Detector plugin entry point** — separately-installed packages can contribute
+  detectors via the `contextduty.detectors` entry-point group (a zero-argument
+  factory returning `list[Detector]`), discovered and merged automatically. Purely
+  additive: with no plugin installed, behavior is identical. This is the extension
+  point for distributable/premium detector packs.
+
+---
+
 ## [2.2.0] — 2026-08-01
 
 ### Changed

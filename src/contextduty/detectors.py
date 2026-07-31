@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import Callable
 
 
@@ -271,6 +272,63 @@ DETECTORS: list[Detector] = [
     Detector(name=name, pattern=re.compile(pattern, flags), validator=_VALIDATORS.get(name))
     for name, pattern, flags in _PATTERNS
 ]
+
+
+# ── Plugin detectors ────────────────────────────────────────────────────────
+# Separately-installed packages can contribute detectors without editing this
+# file, by registering a factory under the ``contextduty.detectors`` entry-point
+# group in their own package metadata:
+#
+#     [project.entry-points."contextduty.detectors"]
+#     my_pack = "my_package.detectors:load"
+#
+# where ``my_package.detectors.load`` is a zero-argument callable returning a
+# ``list[Detector]``.  This is purely additive: with no such package installed,
+# ``get_all_detectors()`` returns exactly the built-in ``DETECTORS`` and nothing
+# about the default behaviour changes.
+PLUGIN_ENTRY_POINT_GROUP = "contextduty.detectors"
+
+_plugin_cache: list[Detector] | None = None
+
+
+def load_plugin_detectors() -> list[Detector]:
+    """Return detectors contributed by installed plugins (cached).
+
+    Each entry point in the ``contextduty.detectors`` group is loaded to a
+    zero-argument callable returning ``list[Detector]``.  A plugin that fails to
+    load or returns the wrong type is skipped — the built-in detectors must
+    always work on their own, so a broken third-party pack is never fatal.
+    """
+    global _plugin_cache
+    if _plugin_cache is not None:
+        return _plugin_cache
+
+    found: list[Detector] = []
+    try:
+        discovered = entry_points(group=PLUGIN_ENTRY_POINT_GROUP)
+    except Exception:
+        discovered = []
+    for ep in discovered:
+        try:
+            factory = ep.load()
+            found.extend(d for d in factory() if isinstance(d, Detector))
+        except Exception:
+            # A malfunctioning plugin should never break scanning.
+            continue
+
+    _plugin_cache = found
+    return found
+
+
+def get_all_detectors() -> list[Detector]:
+    """Built-in :data:`DETECTORS` plus any plugin-contributed detectors."""
+    return DETECTORS + load_plugin_detectors()
+
+
+def _reset_plugin_cache() -> None:
+    """Clear the plugin-detector cache. Intended for tests."""
+    global _plugin_cache
+    _plugin_cache = None
 
 
 def stable_mask(detector_name: str, value: str) -> str:

@@ -134,6 +134,19 @@ contextduty scan --verify src/config.py   # 🔴 LIVE vs ⚪ inactive per findin
 { "custom_detectors": { "employee_id": "\\bEMP-[0-9]{6}\\b" } }
 ```
 
+**Detector plugins** (for packaged, distributable detector sets) — a separately
+installed package can contribute detectors without editing the core, by
+registering a factory under the `contextduty.detectors` entry-point group:
+
+```toml
+# in the plugin package's pyproject.toml
+[project.entry-points."contextduty.detectors"]
+my_pack = "my_package.detectors:load"   # load() -> list[Detector]
+```
+
+They're discovered automatically and merged with the built-ins. With no plugin
+installed, behavior is unchanged.
+
 > 📊 **Benchmarked:** 100k prompts, fully local — p99 latency ~13 ms, precision 1.000, F1 0.94 (0.99 at threshold 0.4). See [benchmarks/README.md](benchmarks/README.md).
 
 ---

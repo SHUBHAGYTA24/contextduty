@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import BINARY_EXTENSIONS
-from .detectors import DETECTORS, Detector, stable_mask
+from .detectors import Detector, get_all_detectors, stable_mask
 from .policy import Policy
 
 __all__ = [
@@ -90,7 +90,7 @@ def _is_allowed(value: str, detector_name: str, policy: Policy) -> bool:
 
 
 def _active_detectors(policy: Policy) -> list[Detector]:
-    active = [detector for detector in DETECTORS if detector.name in policy.detectors]
+    active = [detector for detector in get_all_detectors() if detector.name in policy.detectors]
     for name, pattern_str in policy.custom_detectors.items():
         if name in policy.detectors:
             # Cache compiled patterns — same pattern string reuses the compiled object.

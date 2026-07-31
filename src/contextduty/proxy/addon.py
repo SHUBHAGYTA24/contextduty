@@ -36,14 +36,42 @@ class ContextDutyAddon:
 
     def __init__(self, policy_path: str | None = None, audit_log: str | None = None):
         from contextduty.engine import scan_text
-        from contextduty.policy import load_policy
 
         self._scan_text = scan_text
+        self._findings_total = 0
+        self._requests_intercepted = 0
+        self._apply_config(policy_path, audit_log)
+
+    def _apply_config(self, policy_path: str | None, audit_log: str | None) -> None:
+        """(Re)load the policy and audit-log path from explicit values."""
+        from contextduty.policy import load_policy
+
         policy_file = Path(policy_path) if policy_path else Path(".contextduty.json")
         self.policy = load_policy(policy_file if policy_file.exists() else None)
         self.audit_log = Path(audit_log) if audit_log else None
-        self._findings_total = 0
-        self._requests_intercepted = 0
+
+    def load(self, loader) -> None:
+        """Declare the mitmproxy options so ``--set contextduty_policy=...`` is valid.
+
+        Without this, mitmproxy rejects the unknown ``--set`` keys passed by
+        ``proxy/server.py`` and the proxy fails to start.
+        """
+        loader.add_option(
+            "contextduty_policy", str, "", "Path to the ContextDuty policy JSON file."
+        )
+        loader.add_option(
+            "contextduty_audit_log", str, "", "Path to the ContextDuty audit log (JSONL)."
+        )
+
+    def configure(self, updated) -> None:
+        """Read the configured policy/audit-log options once mitmproxy sets them."""
+        if "contextduty_policy" not in updated and "contextduty_audit_log" not in updated:
+            return
+        from mitmproxy import ctx
+
+        policy_path = ctx.options.contextduty_policy or None
+        audit_log = ctx.options.contextduty_audit_log or None
+        self._apply_config(policy_path, audit_log)
 
     def request(self, flow) -> None:  # mitmproxy.http.HTTPFlow
         """Called by mitmproxy for every intercepted request."""

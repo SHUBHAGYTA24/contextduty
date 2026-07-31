@@ -49,6 +49,7 @@ def _inject_texts(body, texts, host):
 addons = [ContextDutyAddon()]
 
 __all__ = [
+    "addons",
     "ContextDutyAddon",
     "_block_response",
     "AI_HOSTS",

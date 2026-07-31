@@ -7,7 +7,16 @@ ContextDuty uses [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [2.1.0] — unreleased
+## [2.2.0] — 2026-08-01
+
+### Changed
+- **`Development Status` classifier** bumped from `4 - Beta` to
+  `5 - Production/Stable` — PyPI now reflects the project's 2.x maturity
+- README: added the standard OpenSSF Best Practices badge alongside the Baseline badge
+
+---
+
+## [2.1.0] — 2026-07-31
 
 ### Added
 - **Team reporting + enrollment** — `contextduty team enroll` writes a `report_to`

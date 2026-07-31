@@ -122,7 +122,9 @@ def proxy_start(
         _PROXY_HOST,
         "--listen-port",
         str(port),
-        "--ssl-insecure",
+        # NOTE: upstream TLS verification is intentionally left ON. A security
+        # proxy must not disable the user's protection against server
+        # impersonation (do not add --ssl-insecure here).
         "-s",
         str(addon_path),
         "--set",

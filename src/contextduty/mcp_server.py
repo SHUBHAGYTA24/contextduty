@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .engine import redact_file, report_to_json, scan_file, scan_text
 from .policy import load_policy
 
@@ -190,7 +191,7 @@ def run_stdio() -> None:
                 result = {
                     "protocolVersion": PROTOCOL_VERSION,
                     "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": {"name": "contextduty", "version": "0.1.0"},
+                    "serverInfo": {"name": "contextduty", "version": __version__},
                 }
                 _send(_ok(_id, result))
                 continue

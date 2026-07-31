@@ -298,3 +298,48 @@ def test_addon_warn_mode_does_not_redact():
     # warn mode — text unchanged, not blocked
     flow.request.set_text.assert_not_called()
     assert flow.response is None
+
+
+# ---------------------------------------------------------------------------
+# mitmproxy option wiring — regression guard for the proxy config bug
+# (server.py passes --set contextduty_policy/audit_log; the addon must declare
+#  and read them, or mitmdump errors on start and the config is silently lost.)
+# ---------------------------------------------------------------------------
+
+
+def test_addon_declares_mitmproxy_options():
+    """load() must declare the --set options or mitmproxy rejects them at startup."""
+    captured: dict[str, object] = {}
+
+    class FakeLoader:
+        def add_option(self, name, typ, default, help):  # noqa: A002
+            captured[name] = (typ, default)
+
+    ContextDutyAddon().load(FakeLoader())
+    assert "contextduty_policy" in captured
+    assert "contextduty_audit_log" in captured
+
+
+def test_addon_configure_applies_policy_and_audit(tmp_path, monkeypatch):
+    """configure() must read the mitmproxy options and actually apply them."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    mitm_ctx = pytest.importorskip("mitmproxy.ctx")
+
+    policy_file = tmp_path / "p.json"
+    policy_file.write_text('{"mode": "block", "detectors": ["email"], "custom_detectors": {}}')
+    audit = tmp_path / "audit.jsonl"
+
+    addon = ContextDutyAddon()
+
+    fake_options = MagicMock()
+    fake_options.contextduty_policy = str(policy_file)
+    fake_options.contextduty_audit_log = str(audit)
+    monkeypatch.setattr(mitm_ctx, "options", fake_options, raising=False)
+
+    addon.configure({"contextduty_policy", "contextduty_audit_log"})
+
+    assert addon.policy.mode == "block"
+    assert addon.audit_log == audit

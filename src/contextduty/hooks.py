@@ -64,12 +64,21 @@ BLOCKED=0
 FINDINGS=0
 
 while IFS= read -r file; do
-  # Skip binary files
-  if ! file "$file" 2>/dev/null | grep -qE "text|JSON|CSV|XML|script"; then
+  # Scan the STAGED content, not the working-tree file, so that partially
+  # staged changes (git add -p) are checked exactly as they will be committed.
+  STAGED_BLOB=$(mktemp)
+  if ! git show ":$file" > "$STAGED_BLOB" 2>/dev/null; then
+    rm -f "$STAGED_BLOB"
     continue
   fi
 
-  SCAN_ARGS=("$file")
+  # Skip binary files (inspect the staged blob)
+  if ! file "$STAGED_BLOB" 2>/dev/null | grep -qE "text|JSON|CSV|XML|script"; then
+    rm -f "$STAGED_BLOB"
+    continue
+  fi
+
+  SCAN_ARGS=("$STAGED_BLOB")
   if [ -f "$CONTEXTDUTY_POLICY" ]; then
     SCAN_ARGS+=(--policy "$CONTEXTDUTY_POLICY")
   fi
@@ -78,6 +87,7 @@ while IFS= read -r file; do
   fi
 
   OUTPUT=$(contextduty scan "${{SCAN_ARGS[@]}}" 2>&1); EXIT_CODE=$?
+  rm -f "$STAGED_BLOB"
 
   # Parse findings_count from JSON output
   COUNT=$(echo "$OUTPUT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('findings_count',0))" 2>/dev/null || echo "0")

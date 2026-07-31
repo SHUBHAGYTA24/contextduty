@@ -2,6 +2,19 @@
 
 Thanks for your interest! ContextDuty is an open-source AI context firewall — contributions of all sizes are welcome.
 
+## Contributor License Agreement (required)
+
+Before your first pull request can be merged, you must agree to the
+[Contributor License Agreement (CLA)](CLA.md). **You keep the copyright to your
+own code** — the CLA simply grants the maintainer the rights needed to evolve
+and, in the future, build commercial products from the Project.
+
+To sign: open your pull request, then add a comment with this exact line:
+
+> I have read the ContextDuty CLA and I agree to it. My Contributions are submitted under its terms.
+
+(A CLA-assistant bot may automate this check on your PR.)
+
 ## Get started in 3 steps
 
 ```bash

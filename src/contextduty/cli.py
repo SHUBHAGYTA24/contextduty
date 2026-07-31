@@ -243,6 +243,27 @@ def _parser() -> argparse.ArgumentParser:
         help="Optional path to write the JSON report. Defaults to stdout.",
     )
 
+    # ── team (fleet visibility — metadata only) ────────────────────────────────
+    team_parser = subparsers.add_parser(
+        "team",
+        help="Team fleet visibility — self-hosted collector + dashboard (metadata only).",
+    )
+    team_sub = team_parser.add_subparsers(dest="team_command", required=True)
+    team_serve = team_sub.add_parser(
+        "serve", help="Run the self-hosted fleet collector + dashboard."
+    )
+    team_serve.add_argument("--port", type=int, default=7043, help="Port (default: 7043).")
+    team_serve.add_argument(
+        "--token", default=None, help="Shared secret endpoints authenticate with."
+    )
+    team_serve.add_argument(
+        "--store", default=None, help="Path to the fleet metadata store (JSONL)."
+    )
+    team_serve.add_argument("--demo", action="store_true", help="Serve a synthetic demo fleet.")
+    team_serve.add_argument(
+        "--no-open", dest="no_open", action="store_true", help="Do not open a browser."
+    )
+
     return parser
 
 
@@ -404,6 +425,19 @@ def main() -> None:  # noqa: C901
             print(f"Report written to {args.output_path}")
         else:
             print(output)
+        return
+
+    if args.command == "team":
+        if args.team_command == "serve":
+            from .team import serve as team_serve
+
+            team_serve(
+                port=args.port,
+                store=Path(args.store) if args.store else None,  # type: ignore[arg-type]
+                token=args.token,
+                demo=args.demo,
+                open_browser=not args.no_open,
+            )
         return
 
     if args.command == "policy":

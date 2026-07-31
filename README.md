@@ -186,6 +186,7 @@ contextduty dashboard          # reads ~/.contextduty/audit.jsonl
 | `contextduty scan <file\|dir> [--nlp] [--verify]` | Scan and print JSON findings (`--verify` checks if found keys are live) |
 | `contextduty redact --in <f> --out <f>` | Write a redacted copy |
 | `contextduty dashboard` / `report` | Audit dashboard / log summary |
+| `contextduty team serve [--demo]` | Self-hosted fleet dashboard (metadata-only) — try `--demo` |
 | `contextduty policy validate` | Validate and resolve a layered policy |
 | `contextduty init` | Create a default `.contextduty.json` |
 | `contextduty demo` | 20-second interactive walkthrough |

@@ -466,5 +466,15 @@ def main() -> None:  # noqa: C901
     raise SystemExit(1)
 
 
+def main_dashboard() -> None:
+    """Console entrypoint for ``contextduty-dashboard``.
+
+    The primary CLI requires a subcommand, whereas this convenience command
+    should launch the dashboard directly while retaining its dashboard flags.
+    """
+    sys.argv.insert(1, "dashboard")
+    main()
+
+
 if __name__ == "__main__":
     main()

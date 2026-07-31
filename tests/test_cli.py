@@ -28,6 +28,18 @@ def test_version_flag():
     assert re.search(r"\d+\.\d+\.\d+", result.stdout), "should contain semver"
 
 
+def test_dashboard_console_entrypoint_injects_dashboard_command(monkeypatch):
+    from contextduty import cli
+
+    captured: list[str] = []
+    monkeypatch.setattr(cli, "main", lambda: captured.extend(sys.argv))
+    monkeypatch.setattr(sys, "argv", ["contextduty-dashboard", "--demo", "--no-open"])
+
+    cli.main_dashboard()
+
+    assert captured == ["contextduty-dashboard", "dashboard", "--demo", "--no-open"]
+
+
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------

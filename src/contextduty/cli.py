@@ -264,6 +264,20 @@ def _parser() -> argparse.ArgumentParser:
         "--no-open", dest="no_open", action="store_true", help="Do not open a browser."
     )
 
+    team_enroll = team_sub.add_parser(
+        "enroll", help="Point this repo's policy at a team collector (writes report_to)."
+    )
+    team_enroll.add_argument("--url", required=True, help="Collector base URL (https://…).")
+    team_enroll.add_argument("--token", default="", help="Shared secret for the collector.")
+    team_enroll.add_argument("--policy", default=".contextduty.json", help="Policy file to update.")
+
+    team_bypass = team_sub.add_parser(
+        "report-bypass", help="Emit a bypass event (called by the post-commit hook)."
+    )
+    team_bypass.add_argument("--policy", default=".contextduty.json", help="Policy file.")
+    team_bypass.add_argument("--repo", default="", help="Repository identifier.")
+    team_bypass.add_argument("--detail", default="git commit --no-verify", help="Bypass detail.")
+
     return parser
 
 
@@ -346,6 +360,11 @@ def main() -> None:  # noqa: C901
                 target=args.target,
                 audit_log_path=Path(args.audit_log),
             )
+        # Team reporting (opt-in via policy.report_to; metadata only, non-blocking)
+        if getattr(policy, "report_to", None):
+            from .team.report import report_scan
+
+            report_scan(policy, result, tool="cli")
         if result.blocked:
             print(f"BLOCKED by policy ({policy_ref or 'default'})", file=sys.stderr)
             raise SystemExit(2)
@@ -438,6 +457,17 @@ def main() -> None:  # noqa: C901
                 demo=args.demo,
                 open_browser=not args.no_open,
             )
+        elif args.team_command == "enroll":
+            policy_file = Path(args.policy)
+            cfg = json.loads(policy_file.read_text()) if policy_file.exists() else {}
+            cfg["report_to"] = {"url": args.url, "token": args.token}
+            policy_file.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+            print(f"Enrolled: {policy_file} now reports to {args.url}")
+        elif args.team_command == "report-bypass":
+            from .team.report import report_bypass
+
+            _, policy = _load_policy_with_fallback(args.policy)
+            report_bypass(policy, repo=args.repo, detail=args.detail)
         return
 
     if args.command == "policy":

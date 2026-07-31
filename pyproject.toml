@@ -68,6 +68,7 @@ select = ["E", "F", "I"]   # pycodestyle errors, pyflakes, isort
 
 [tool.ruff.lint.per-file-ignores]
 "src/contextduty/dashboard.py" = ["E501"]
+"src/contextduty/team/collector.py" = ["E501"]
 "src/contextduty/demo.py" = ["E501"]
 "src/contextduty/cli.py" = ["E501"]
 "src/contextduty/cursor.py" = ["E501"]

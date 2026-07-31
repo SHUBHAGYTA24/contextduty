@@ -117,3 +117,19 @@ SKIP_DIRECTORIES: frozenset[str] = frozenset(
         ".svn",
     }
 )
+
+
+__all__ = [
+    "BINARY_EXTENSIONS",
+    "CA_CERT_FILE",
+    "DEFAULT_AUDIT_LOG",
+    "DEFAULT_POLICY_FILE",
+    "HOME_DIR",
+    "LOG_LEVEL",
+    "MITMPROXY_DIR",
+    "NO_COLOR",
+    "PROXY_CONFIG_FILE",
+    "PROXY_PID_FILE",
+    "PROXY_PORT",
+    "SKIP_DIRECTORIES",
+]

@@ -1,0 +1,8 @@
+name: ContextDuty CodeQL config
+
+# Analyze only the shipped library source. Tests, demos, examples, and
+# benchmarks are not distributed; their alerts are noise (test-only assertions,
+# demo code that prints synthetic data to illustrate redaction), so they are
+# excluded from security analysis.
+paths:
+  - src

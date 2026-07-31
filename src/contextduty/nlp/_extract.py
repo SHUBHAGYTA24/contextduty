@@ -14,27 +14,29 @@ import re
 # Compiled patterns (module-level for reuse)
 # ---------------------------------------------------------------------------
 
-# Single/double-quoted bodies use the "unrolled loop" form
-# (`[^"\\]*(?:\\.[^"\\]*)*`), which is guaranteed linear — no catastrophic
-# backtracking on strings with many escaped quotes.
+# All quantifiers are BOUNDED so every match attempt is linear in the bound,
+# not the input — this removes the polynomial-ReDoS risk that finditer over a
+# long, unterminated literal would otherwise create. Bounds are generous
+# (well past any real string/comment); anything larger simply isn't extracted.
 _STRING_LITERAL = re.compile(
     r"(?:"
-    r'"""[\s\S]*?"""|'  # triple-double-quoted
-    r"'''[\s\S]*?'''|"  # triple-single-quoted
-    r'f"""[\s\S]*?"""|'  # f-string triple-double
-    r"f'''[\s\S]*?'''|"  # f-string triple-single
-    r'"[^"\\]*(?:\\.[^"\\]*)*"|'  # double-quoted
-    r"'[^'\\]*(?:\\.[^'\\]*)*'"  # single-quoted
+    r'"""[\s\S]{0,10000}?"""|'  # triple-double-quoted
+    r"'''[\s\S]{0,10000}?'''|"  # triple-single-quoted
+    r'f"""[\s\S]{0,10000}?"""|'  # f-string triple-double
+    r"f'''[\s\S]{0,10000}?'''|"  # f-string triple-single
+    r'"[^"\\\n]{0,2000}(?:\\.[^"\\\n]{0,2000}){0,200}"|'  # double-quoted
+    r"'[^'\\\n]{0,2000}(?:\\.[^'\\\n]{0,2000}){0,200}'"  # single-quoted
     r")"
 )
 
-# Comment bodies use `[ \t]*` (not `\s*`) and a single greedy capture (no lazy
-# `.*?$` overlap), so there is no polynomial backtracking on padded lines.
+# `.` (which excludes newline) captures the whole line with no `\s*`/`.*`
+# overlap; block bodies use a bounded lazy quantifier. Leading whitespace is
+# stripped by the caller.
 _COMMENT_LINE = re.compile(
     r"(?:"
-    r"#[ \t]*(.*)|"  # Python / Ruby / Shell
-    r"//[ \t]*(.*)|"  # JS / Java / Go / Rust
-    r"/\*([\s\S]*?)\*/"  # Block comments
+    r"#(.*)|"  # Python / Ruby / Shell
+    r"//(.*)|"  # JS / Java / Go / Rust
+    r"/\*([\s\S]{0,10000}?)\*/"  # Block comments
     r")",
     re.MULTILINE,
 )

@@ -15,8 +15,6 @@ from contextduty.detectors import DETECTORS, stable_mask
 
 DETECTOR_MAP = {d.name: d for d in DETECTORS}
 
-_hex = "a1b2c3d4e5" * 4  # 40 hex chars
-
 # detector -> (positives, negatives)
 _CASES: dict[str, tuple[list[str], list[str]]] = {
     # ── Cloud / Infrastructure ──────────────────────────────────────────────

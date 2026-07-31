@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib.metadata import entry_points
 from typing import Callable
 
@@ -288,21 +289,18 @@ DETECTORS: list[Detector] = [
 # about the default behaviour changes.
 PLUGIN_ENTRY_POINT_GROUP = "contextduty.detectors"
 
-_plugin_cache: list[Detector] | None = None
 
-
-def load_plugin_detectors() -> list[Detector]:
+@lru_cache(maxsize=1)
+def load_plugin_detectors() -> tuple[Detector, ...]:
     """Return detectors contributed by installed plugins (cached).
 
     Each entry point in the ``contextduty.detectors`` group is loaded to a
     zero-argument callable returning ``list[Detector]``.  A plugin that fails to
     load or returns the wrong type is skipped — the built-in detectors must
     always work on their own, so a broken third-party pack is never fatal.
-    """
-    global _plugin_cache
-    if _plugin_cache is not None:
-        return _plugin_cache
 
+    Result is cached for the process; call :func:`_reset_plugin_cache` to clear.
+    """
     found: list[Detector] = []
     try:
         discovered = entry_points(group=PLUGIN_ENTRY_POINT_GROUP)
@@ -316,19 +314,17 @@ def load_plugin_detectors() -> list[Detector]:
             # A malfunctioning plugin should never break scanning.
             continue
 
-    _plugin_cache = found
-    return found
+    return tuple(found)
 
 
 def get_all_detectors() -> list[Detector]:
     """Built-in :data:`DETECTORS` plus any plugin-contributed detectors."""
-    return DETECTORS + load_plugin_detectors()
+    return DETECTORS + list(load_plugin_detectors())
 
 
 def _reset_plugin_cache() -> None:
     """Clear the plugin-detector cache. Intended for tests."""
-    global _plugin_cache
-    _plugin_cache = None
+    load_plugin_detectors.cache_clear()
 
 
 def stable_mask(detector_name: str, value: str) -> str:

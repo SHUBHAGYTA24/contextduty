@@ -22,7 +22,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
-from .detectors import DETECTORS
+from .detectors import get_all_detectors
 from .engine import ScanResult, ScanTextResult, scan_text
 from .policy import Policy
 
@@ -34,7 +34,7 @@ def _default_policy(mode: str = "warn") -> Policy:
     """Create a sensible default policy for notebook use — all detectors enabled."""
     return Policy(
         mode=mode,
-        detectors={d.name for d in DETECTORS},
+        detectors={d.name for d in get_all_detectors()},
         custom_detectors={},
     )
 

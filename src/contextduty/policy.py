@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .core.exceptions import PolicyCycleError, PolicyValidationError
-from .detectors import DETECTORS
+from .detectors import get_all_detectors
 
 __all__ = [
     "Policy",
@@ -334,7 +334,7 @@ def load_policy(path: Path | None) -> Policy:
     if not isinstance(custom_raw, dict):
         raise PolicyValidationError("policy custom_detectors must be an object of {name: regex}")
 
-    built_in_names = {detector.name for detector in DETECTORS}
+    built_in_names = {detector.name for detector in get_all_detectors()}
     custom_detectors: dict[str, str] = {}
     for name, pattern in custom_raw.items():
         if not isinstance(name, str) or not name.strip():
@@ -389,7 +389,7 @@ def unknown_detector_names(policy: Policy) -> list[str]:
 
     Used to surface typos or stale entries in the policy ``detectors`` list.
     """
-    built_in_names = {detector.name for detector in DETECTORS}
+    built_in_names = {detector.name for detector in get_all_detectors()}
     allowed = built_in_names | set(policy.custom_detectors.keys())
     return sorted(name for name in policy.detectors if name not in allowed)
 

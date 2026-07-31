@@ -11,11 +11,13 @@ counts, and bypass events. Reporting is:
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import os
 import socket
 import threading
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,23 @@ from typing import Any
 from .model import sanitize_event
 
 _TIMEOUT = 3.0
+
+# Outstanding fire-and-forget report threads. Short-lived processes (a CLI scan,
+# a git hook) would otherwise exit before the daemon thread sends its POST, so
+# we flush them at process exit with a small time budget.
+_pending: list[threading.Thread] = []
+
+
+def _flush(deadline: float = 3.0) -> None:
+    end = time.time() + deadline
+    for t in list(_pending):
+        remaining = end - time.time()
+        if remaining <= 0:
+            break
+        t.join(remaining)
+
+
+atexit.register(_flush)
 
 
 def _host() -> str:
@@ -93,7 +112,9 @@ def report(
     if blocking:
         _post(url, token, payload, timeout)
     else:
-        threading.Thread(target=_post, args=(url, token, payload, timeout), daemon=True).start()
+        t = threading.Thread(target=_post, args=(url, token, payload, timeout), daemon=True)
+        _pending.append(t)
+        t.start()
 
 
 def report_scan(policy: Any, result: Any, *, tool: str = "cli", repo: str = "") -> None:

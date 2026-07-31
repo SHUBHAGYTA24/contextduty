@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "contextduty"
-version = "1.0.0"
+# Version is derived automatically from the latest git tag by setuptools-scm.
+# Cut a release with the "Release" GitHub Action (bump patch/minor/major → tag → PyPI).
+dynamic = ["version"]
 description = "Policy-driven context firewall for AI workflows — scan and redact sensitive data before prompts, logs, or traces leave your environment."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,6 +56,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# Version comes from the latest v*.*.* git tag. Between tags, builds get a
+# dev version (e.g. 1.0.1.dev3+g<sha>); only tagged commits are published.
+fallback_version = "1.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

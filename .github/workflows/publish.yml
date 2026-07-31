@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools-scm derives the version from the tag
 
       - uses: actions/setup-python@v5
         with:
@@ -22,6 +24,9 @@ jobs:
 
       - name: Install build tool
         run: pip install build
+
+      - name: Show version setuptools-scm will use
+        run: python -m setuptools_scm || true
 
       - name: Build wheel and sdist
         run: python -m build

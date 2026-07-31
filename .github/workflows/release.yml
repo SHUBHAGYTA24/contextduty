@@ -1,0 +1,56 @@
+name: Release
+
+# One-click release: pick a bump level, and this computes the next semantic
+# version from the latest git tag, then creates and pushes a v*.*.* tag.
+# Pushing that tag triggers publish.yml (build → sign → SBOM → PyPI → GitHub
+# Release). Version numbers are never committed — setuptools-scm reads the tag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semantic version bump"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Compute + push next tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full tag history
+
+      - name: Compute next version
+        id: next
+        run: |
+          set -euo pipefail
+          latest="$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)"
+          latest="${latest:-v0.0.0}"
+          ver="${latest#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$ver"
+          case "${{ github.event.inputs.bump }}" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+          next="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Latest tag: ${latest}  →  next: ${next}"
+          echo "tag=${next}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.next.outputs.tag }}" -m "Release ${{ steps.next.outputs.tag }}"
+          git push origin "${{ steps.next.outputs.tag }}"
+
+      - name: Summary
+        run: |
+          echo "### Released ${{ steps.next.outputs.tag }} :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "publish.yml is now building and publishing this tag to PyPI." >> "$GITHUB_STEP_SUMMARY"

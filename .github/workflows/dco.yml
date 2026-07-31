@@ -1,0 +1,55 @@
+name: DCO
+
+# Enforces the Developer Certificate of Origin (https://developercertificate.org):
+# every commit in a pull request must carry a `Signed-off-by:` trailer matching
+# its author. This is how contributors assert they are legally authorized to
+# submit the contribution (OpenSSF OSPS-LE-01.01).
+
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  dco-check:
+    name: Check DCO sign-off
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify every commit is signed off
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          fail=0
+          for sha in $(git rev-list "${BASE_SHA}..${HEAD_SHA}"); do
+            # Merge commits (2+ parents) are not authored content — skip them.
+            parents=$(git show -s --format='%P' "$sha" | wc -w | tr -d ' ')
+            if [ "$parents" -gt 1 ]; then
+              continue
+            fi
+            name=$(git show -s --format='%an' "$sha")
+            email=$(git show -s --format='%ae' "$sha")
+            expected="Signed-off-by: ${name} <${email}>"
+            if ! git show -s --format='%B' "$sha" | grep -qiF "$expected"; then
+              echo "::error::Commit ${sha} is missing a matching DCO sign-off."
+              echo "  Expected trailer: ${expected}"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "One or more commits are not signed off. Add sign-off with:"
+            echo "  git commit -s            # for new commits"
+            echo "  git commit --amend -s    # to fix the last commit"
+            echo "  git rebase --signoff <base>   # to sign off a range"
+            echo "See CONTRIBUTING.md for the DCO."
+            exit 1
+          fi
+          echo "All commits are signed off. ✓"

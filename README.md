@@ -7,11 +7,13 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-407%20passing-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-412%20passing-brightgreen.svg)](#)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13902/badge)](https://www.bestpractices.dev/projects/13902)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13902/baseline)](https://www.bestpractices.dev/projects/13902)
 
 **Try it live:** [ContextDuty demo on Hugging Face Spaces](https://huggingface.co/spaces/shubhagyta-24/contextduty) · **Detection brain:** [Microsoft Presidio](https://github.com/microsoft/presidio)
+
+**For teams & enterprises:** metadata-only [fleet dashboard](#teams--fleet-visibility-metadata-only) · centrally-managed signed policy · [deployment guide →](ENTERPRISE.md)
 
 ```bash
 pip install contextduty
@@ -24,6 +26,8 @@ contextduty install-hooks    # block commits that contain secrets
 > Presidio detects PII in a string. ContextDuty **enforces** it on the wire —
 > a paste-box can't block your commit, redact your live `api.openai.com`
 > traffic, or sanitize an MCP tool call. This is what that looks like.
+
+**Contents:** [Why](#why) · [What it is](#what-it-is-and-what-it-isnt) · [Enforcement surfaces](#the-five-enforcement-surfaces) · [Quick start](#quick-start) · [Detection](#detection) · [Policy](#policy) · [Teams](#teams--fleet-visibility-metadata-only) · [Commands](#commands) · [Roadmap](#roadmap)
 
 ---
 

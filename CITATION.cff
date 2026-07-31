@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use ContextDuty in your research or product, please cite it."
+title: "ContextDuty: a local-first prompt firewall for AI workflows"
+abstract: >-
+  ContextDuty is a local-first prompt firewall that detects and redacts secrets
+  and PII before they reach AI tools — across the IDE, git commits, live AI-API
+  traffic, and MCP tool calls. Detection is powered by Microsoft Presidio plus
+  deterministic regex detectors; enforcement runs entirely on the developer's
+  machine.
+type: software
+authors:
+  - name: "ContextDuty Contributors"
+repository-code: "https://github.com/SHUBHAGYTA24/contextduty"
+url: "https://github.com/SHUBHAGYTA24/contextduty"
+license: MIT
+keywords:
+  - security
+  - pii
+  - redaction
+  - secrets
+  - llm
+  - prompt-firewall
+  - devsecops

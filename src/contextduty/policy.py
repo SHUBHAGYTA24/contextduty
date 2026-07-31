@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import urllib.request
 from dataclasses import dataclass, field
@@ -42,6 +44,9 @@ class Policy:
     custom_detectors: dict[str, str]
     detector_modes: dict[str, str] = field(default_factory=dict)
     allow_patterns: dict[str, list[str]] = field(default_factory=dict)
+    # Optional team-layer reporting target: {"url": "...", "token": "..."}.
+    # When set, endpoints emit *metadata-only* events to the collector.
+    report_to: dict[str, str] = field(default_factory=dict)
 
 
 DEFAULT_POLICY: dict[str, Any] = {
@@ -142,16 +147,31 @@ def _read_policy_config(path: Path) -> dict[str, Any]:
     return raw
 
 
-def _normalize_extends(value: Any) -> list[str]:
+def _normalize_extends(value: Any) -> list[tuple[str, str | None]]:
+    """Return a list of ``(ref, sha256_pin)`` from the ``extends`` value.
+
+    Each entry may be a string (path or URL) or an object
+    ``{"url": "...", "sha256": "..."}``. When ``sha256`` is present, the fetched
+    policy's content is verified against it (integrity pinning) — this is the
+    "signed" guarantee for centrally distributed policies over the network.
+    """
     if value is None:
         return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return value
-    raise PolicyValidationError(
-        "policy extends must be a string or list of strings", field="extends"
-    )
+    items = [value] if not isinstance(value, list) else value
+    out: list[tuple[str, str | None]] = []
+    for item in items:
+        if isinstance(item, str):
+            out.append((item, None))
+        elif isinstance(item, dict) and isinstance(item.get("url") or item.get("path"), str):
+            ref = str(item.get("url") or item.get("path"))
+            pin = item.get("sha256")
+            out.append((ref, str(pin) if pin else None))
+        else:
+            raise PolicyValidationError(
+                "policy extends entries must be a string or {url, sha256} object",
+                field="extends",
+            )
+    return out
 
 
 def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -198,6 +218,10 @@ def _merge_policy_configs(base: dict[str, Any], override: dict[str, Any]) -> dic
         merged_ap[key] = list(dict.fromkeys(existing + patterns))
     merged["allow_patterns"] = merged_ap
 
+    # report_to: child fully overrides parent when provided
+    if override.get("report_to"):
+        merged["report_to"] = override["report_to"]
+
     return merged
 
 
@@ -219,10 +243,10 @@ def _resolve_policy_config(path: Path, seen: set[Path] | None = None) -> dict[st
         "allow_patterns": {},
     }
 
-    for parent_ref in parent_refs:
+    for parent_ref, pin in parent_refs:
         if _is_url(parent_ref):
             parent_config = _resolve_policy_config_with_urls(
-                parent_ref, resolved_path.parent, seen, set()
+                parent_ref, resolved_path.parent, seen, set(), pin=pin
             )
         else:
             parent_path = (resolved_path.parent / parent_ref).resolve()
@@ -345,12 +369,18 @@ def load_policy(path: Path | None) -> Policy:
         )
     allow_patterns = _validate_allow_patterns(allow_patterns_raw)
 
+    report_to_raw = config.get("report_to", {})
+    if report_to_raw and not isinstance(report_to_raw, dict):
+        raise PolicyValidationError("policy report_to must be an object with a 'url'")
+    report_to = {str(k): str(v) for k, v in (report_to_raw or {}).items()}
+
     return Policy(
         mode=mode,
         detectors=detectors,
         custom_detectors=custom_detectors,
         detector_modes=detector_modes,
         allow_patterns=allow_patterns,
+        report_to=report_to,
     )
 
 
@@ -374,19 +404,36 @@ def _is_url(ref: str) -> bool:
     return parsed.scheme in ("http", "https")
 
 
-def _fetch_url_policy(url: str, timeout: int = 10) -> dict[str, Any]:
-    """Fetch a policy JSON from a URL (HTTPS only in production).
+def _fetch_url_policy(
+    url: str, timeout: int = 10, expected_sha256: str | None = None
+) -> dict[str, Any]:
+    """Fetch a policy JSON from a URL for centralized distribution.
 
-    This enables centralized policy distribution — a security team hosts
-    one canonical URL and all developer machines extend it:
+    Hardening:
+      * **HTTPS is required** — plain ``http://`` is rejected (adversary-in-the-
+        middle risk). Set ``CONTEXTDUTY_ALLOW_INSECURE_POLICY=1`` to permit
+        ``http`` (local testing only).
+      * **Integrity pinning** — when *expected_sha256* is provided (from an
+        ``extends`` entry ``{url, sha256}``), the fetched bytes are verified
+        against it. A mismatch is rejected, so a compromised host cannot serve
+        a tampered policy.
 
-        { "extends": "https://policy.corp.com/soc2-baseline.json" }
+    A security team hosts one canonical, pinned URL and every developer machine
+    extends it:
 
-    The fetch uses stdlib urllib — no third-party dependencies.
+        { "extends": {"url": "https://policy.corp.com/soc2.json", "sha256": "…"} }
+
+    Uses stdlib urllib + hashlib — no third-party dependencies.
     """
     parsed = urlparse(url)
+    allow_http = os.environ.get("CONTEXTDUTY_ALLOW_INSECURE_POLICY", "") == "1"
+    if parsed.scheme == "http" and not allow_http:
+        raise PolicyValidationError(
+            f"policy URL must use https (got http): {url}. "
+            "Set CONTEXTDUTY_ALLOW_INSECURE_POLICY=1 to override for local testing."
+        )
     if parsed.scheme not in ("http", "https"):
-        raise PolicyValidationError(f"policy URL must use http or https scheme: {url}")
+        raise PolicyValidationError(f"policy URL must use https scheme: {url}")
 
     req = urllib.request.Request(
         url,
@@ -394,13 +441,21 @@ def _fetch_url_policy(url: str, timeout: int = 10) -> dict[str, Any]:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            raw = resp.read().decode("utf-8")
+            raw_bytes = resp.read()
     except Exception as exc:
         raise PolicyValidationError(f"failed to fetch policy from {url}: {exc}") from exc
 
+    if expected_sha256:
+        actual = hashlib.sha256(raw_bytes).hexdigest()
+        want = expected_sha256.lower().removeprefix("sha256:")
+        if actual != want:
+            raise PolicyValidationError(
+                f"policy at {url} failed integrity check: expected sha256 {want}, got {actual}"
+            )
+
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        data = json.loads(raw_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise PolicyValidationError(f"policy at {url} is not valid JSON: {exc}") from exc
 
     if not isinstance(data, dict):
@@ -422,13 +477,14 @@ def _resolve_policy_config_with_urls(
     base_path: Path,
     seen_files: set[Path],
     seen_urls: set[str],
+    pin: str | None = None,
 ) -> dict[str, Any]:
     """Resolve a policy ref that may be either a file path or a URL."""
     if _is_url(ref):
         if ref in seen_urls:
             raise PolicyValidationError(f"policy extends cycle detected at URL: {ref}")
         seen_urls.add(ref)
-        config = _fetch_url_policy(ref)
+        config = _fetch_url_policy(ref, expected_sha256=pin)
         parent_refs = _normalize_extends(config.get("extends"))
         merged: dict[str, Any] = {
             "mode": DEFAULT_POLICY["mode"],
@@ -437,9 +493,9 @@ def _resolve_policy_config_with_urls(
             "detector_modes": {},
             "allow_patterns": {},
         }
-        for parent_ref in parent_refs:
+        for parent_ref, parent_pin in parent_refs:
             parent_config = _resolve_policy_config_with_urls(
-                parent_ref, base_path, seen_files, seen_urls
+                parent_ref, base_path, seen_files, seen_urls, pin=parent_pin
             )
             merged = _merge_policy_configs(merged, parent_config)
         local_config = dict(config)

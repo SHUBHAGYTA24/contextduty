@@ -71,3 +71,94 @@ def test_aggregate_coverage_and_dark_endpoints():
 def test_demo_fleet_is_content_free():
     for ev in build_demo_fleet():
         assert is_content_free(ev), f"demo event leaked a non-metadata field: {ev}"
+
+
+# ---------------------------------------------------------------------------
+# Endpoint reporting (Phase 0) — non-blocking, metadata-only
+# ---------------------------------------------------------------------------
+
+
+def test_report_noop_without_report_to():
+    from contextduty.policy import Policy
+    from contextduty.team.report import report
+
+    p = Policy(mode="warn", detectors={"email"}, custom_detectors={})  # no report_to
+    # Should simply do nothing (no exception, no network).
+    report(p, {"event": "heartbeat"})
+
+
+def test_report_scan_sends_sanitized_metadata(monkeypatch):
+    import contextduty.team.report as report_mod
+    from contextduty.engine import ScanResult
+    from contextduty.policy import Policy
+
+    sent: list[dict] = []
+    monkeypatch.setattr(report_mod, "_post", lambda url, token, ev, timeout: sent.append(ev))
+
+    p = Policy(
+        mode="block",
+        detectors={"aws_key"},
+        custom_detectors={},
+        report_to={"url": "https://collector.example", "token": "x"},
+    )
+    result = ScanResult(
+        findings_count=2, detector_counts={"aws_key": 2}, blocked=True, blocked_by=["aws_key"]
+    )
+    report_mod.report_scan(p, result, tool="cli", repo="my-repo")
+
+    # heartbeat + block event, both content-free
+    from contextduty.team.model import is_content_free
+
+    assert len(sent) == 2
+    assert all(is_content_free(e) for e in sent)
+    events = {e["event"] for e in sent}
+    assert events == {"heartbeat", "block"}
+
+
+# ---------------------------------------------------------------------------
+# Signed / hardened policy distribution
+# ---------------------------------------------------------------------------
+
+
+def test_policy_url_rejects_plain_http(monkeypatch):
+    monkeypatch.delenv("CONTEXTDUTY_ALLOW_INSECURE_POLICY", raising=False)
+    from contextduty.core.exceptions import PolicyValidationError
+    from contextduty.policy import _fetch_url_policy
+
+    try:
+        _fetch_url_policy("http://policy.example/p.json")
+        raise AssertionError("expected http to be rejected")
+    except PolicyValidationError as e:
+        assert "https" in str(e)
+
+
+def test_policy_sha256_pin_mismatch_rejected(monkeypatch):
+    import hashlib
+
+    from contextduty.core.exceptions import PolicyValidationError
+    from contextduty.policy import _fetch_url_policy
+
+    body = b'{"mode":"block","detectors":["email"]}'
+
+    class _R:
+        def read(self):
+            return body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    import contextduty.policy as pol
+
+    monkeypatch.setattr(pol.urllib.request, "urlopen", lambda *a, **k: _R())
+    # correct pin passes
+    good = hashlib.sha256(body).hexdigest()
+    assert _fetch_url_policy("https://p.example/p.json", expected_sha256=good)["mode"] == "block"
+    # wrong pin fails
+    try:
+        _fetch_url_policy("https://p.example/p.json", expected_sha256="deadbeef")
+        raise AssertionError("expected integrity failure")
+    except PolicyValidationError as e:
+        assert "integrity" in str(e)

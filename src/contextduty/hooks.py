@@ -134,6 +134,41 @@ if [ "$FINDINGS" -gt 0 ]; then
   echo "[ContextDuty] $FINDINGS finding(s) noted (warn mode — commit allowed)"
 fi
 
+# Record the tree this hook approved so the post-commit hook can detect a
+# later --no-verify bypass (which skips this hook entirely).
+git write-tree > "$(git rev-parse --git-dir)/contextduty-approved-tree" 2>/dev/null || true
+
+exit 0
+"""
+
+# Post-commit hook — runs even with `git commit --no-verify`, so it can observe
+# when the pre-commit scan was skipped and emit a metadata-only bypass event.
+_POST_COMMIT_TEMPLATE = """\
+#!/usr/bin/env bash
+# ContextDuty post-commit hook
+# Installed by: contextduty install-hooks
+# Detects when the pre-commit scan was bypassed (git commit --no-verify) and
+# reports a metadata-only bypass event to the team collector (if configured).
+
+set -uo pipefail
+
+CONTEXTDUTY_POLICY="{policy}"
+command -v contextduty &>/dev/null || exit 0
+
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo ".git")
+MARKER="$GIT_DIR/contextduty-approved-tree"
+HEAD_TREE=$(git rev-parse "HEAD^{{tree}}" 2>/dev/null || echo "")
+APPROVED=$(cat "$MARKER" 2>/dev/null || echo "")
+
+if [ -n "$HEAD_TREE" ] && [ "$HEAD_TREE" != "$APPROVED" ]; then
+  # The pre-commit hook did not approve this exact tree → it was skipped.
+  REPO=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo repo)")
+  ARGS=(team report-bypass --repo "$REPO")
+  if [ -f "$CONTEXTDUTY_POLICY" ]; then
+    ARGS+=(--policy "$CONTEXTDUTY_POLICY")
+  fi
+  contextduty "${{ARGS[@]}}" >/dev/null 2>&1 || true
+fi
 exit 0
 """
 
@@ -199,6 +234,17 @@ def install_git_hook(
 
     hook_path.write_text(hook_content, encoding="utf-8")
     hook_path.chmod(hook_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    # Also install the post-commit hook (bypass detection) unless a foreign one
+    # exists. This is additive — the pre-commit scan works without it.
+    post_path = hooks_dir / "post-commit"
+    if not post_path.exists() or "ContextDuty post-commit hook" in post_path.read_text(
+        encoding="utf-8"
+    ):
+        post_content = _POST_COMMIT_TEMPLATE.format(policy=_bash_dq_escape(str(policy_path)))
+        post_path.write_text(post_content, encoding="utf-8")
+        post_path.chmod(post_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
     return hook_path
 
 
@@ -217,6 +263,12 @@ def uninstall_git_hook(repo_root: Path) -> bool:
             f"Hook at {hook_path} was not installed by ContextDuty. Remove it manually."
         )
     hook_path.unlink()
+    # Remove the companion post-commit hook if we installed it.
+    post_path = repo_root / ".git" / "hooks" / "post-commit"
+    if post_path.exists() and "ContextDuty post-commit hook" in post_path.read_text(
+        encoding="utf-8"
+    ):
+        post_path.unlink()
     return True
 
 

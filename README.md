@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-403%20passing-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-407%20passing-brightgreen.svg)](#)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13902/baseline)](https://www.bestpractices.dev/projects/13902)
 
 **Try it live:** [ContextDuty demo on Hugging Face Spaces](https://huggingface.co/spaces/shubhagyta-24/contextduty) · **Detection brain:** [Microsoft Presidio](https://github.com/microsoft/presidio)
@@ -50,6 +50,7 @@ ContextDuty is the **enforcement fabric around that detection**: it wires it int
 | MCP server | ❌ | ❌ | ❌ | ✅ |
 | Portable block/warn/redact policy | operators only | limited | cloud console | ✅ one JSON, all surfaces |
 | Local-first — nothing leaves the machine | ✅ | cloud engine | ❌ SaaS | ✅ |
+| Fleet visibility without shipping content | ❌ | partial (cloud) | ❌ raw data in SaaS | ✅ metadata-only |
 | Open-source | ✅ | ❌ | ❌ | ✅ MIT |
 
 ---
@@ -118,6 +119,12 @@ python -m spacy download en_core_web_sm
 contextduty scan --nlp src/
 ```
 
+**Live-key verification** (`--verify`, opt-in) — for the keys that support it (GitHub, OpenAI, Stripe, Slack), ContextDuty can make a single read-only call to the credential's *own* provider to tell an active secret from a revoked one, so you triage the real leaks first. It never phones home to ContextDuty — the check goes straight to the issuer.
+
+```bash
+contextduty scan --verify src/config.py   # 🔴 LIVE vs ⚪ inactive per finding
+```
+
 **Deterministic masks:** `AKIAIOSFODNN7EXAMPLE` always becomes `<AWS_KEY_1a5d44a2dc>` — same value, same mask, everywhere — so audit logs stay correlatable without storing raw secrets.
 
 **Custom detectors** (no code, no redeploy):
@@ -150,6 +157,13 @@ contextduty scan --nlp src/
 
 Compliance baselines included: [`policies/soc2-baseline.json`](policies/soc2-baseline.json), [`policies/hipaa-baseline.json`](policies/hipaa-baseline.json).
 
+**Central policy distribution** — `extends` also takes an HTTPS URL, so every repo can inherit one org baseline from a single source of truth. Remote policies are integrity-pinned with a SHA-256 hash and plain `http://` is rejected, so a tampered or man-in-the-middled baseline can't silently loosen everyone's rules:
+
+```jsonc
+{ "extends": { "url": "https://policies.acme.com/org-baseline.json",
+               "sha256": "9f2c…" } }
+```
+
 ---
 
 ## Notebooks, MCP & dashboard
@@ -177,6 +191,22 @@ contextduty dashboard          # reads ~/.contextduty/audit.jsonl
 
 ---
 
+## Teams — fleet visibility, metadata only
+
+Everything above runs per-developer. For a team, ContextDuty adds a **self-hosted control plane** that answers "is the whole fleet actually protected?" — *without ever collecting the sensitive data itself*.
+
+Each endpoint reports only **counts and metadata** — how many secrets were caught, which detectors fired, whether the pre-commit hook was bypassed with `--no-verify` — never the matched values, file contents, or masked tokens. The sanitizer allow-lists a fixed set of fields and drops everything else, so the metadata-only guarantee is enforced in code, not policy.
+
+```bash
+contextduty team serve --demo         # spin up the fleet dashboard on a synthetic fleet
+contextduty team serve --token <secret> --store fleet.jsonl   # real, self-hosted collector
+contextduty team enroll --url https://collector.acme.com --token <secret>   # point a repo at it
+```
+
+The dashboard shows **coverage** (which endpoints are live vs. dark >24h), **leaks prevented**, **top detectors**, and a **bypass feed** of `--no-verify` commits. It's single-tenant and self-hosted today; the roadmap is a managed, per-enterprise deployment. Because it's metadata-only, it gives security teams fleet oversight that cloud DLP can't — no source code or secrets ever leave the developer's machine.
+
+---
+
 ## Commands
 
 | Command | Description |
@@ -188,6 +218,7 @@ contextduty dashboard          # reads ~/.contextduty/audit.jsonl
 | `contextduty redact --in <f> --out <f>` | Write a redacted copy |
 | `contextduty dashboard` / `report` | Audit dashboard / log summary |
 | `contextduty team serve [--demo]` | Self-hosted fleet dashboard (metadata-only) — try `--demo` |
+| `contextduty team enroll --url <u>` | Point this repo's policy at a team collector |
 | `contextduty policy validate` | Validate and resolve a layered policy |
 | `contextduty init` | Create a default `.contextduty.json` |
 | `contextduty demo` | 20-second interactive walkthrough |
@@ -210,6 +241,9 @@ Architecture: `engine.py` (scan/redact), `detectors.py` (60 patterns), `policy.p
 - [x] 60 detectors · git hook · MCP · HTTPS proxy (21 APIs) · 6 IDE ignore files
 - [x] Presidio NLP PII detection · notebook API · audit dashboard · policy layering
 - [x] Local 100k-row latency/quality benchmark · hosted demo Space
+- [x] Team layer — self-hosted, metadata-only fleet dashboard · `--no-verify` bypass detection
+- [x] Opt-in live-key verification · signed (HTTPS + SHA-256) central policy distribution
+- [ ] Managed, per-enterprise team deployment
 - [ ] VS Code / Cursor extension
 - [ ] Prometheus metrics endpoint
 - [ ] International + domain-specific detector packs

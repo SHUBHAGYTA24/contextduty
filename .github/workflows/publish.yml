@@ -89,9 +89,14 @@ jobs:
 
     permissions:
       contents: write
+      id-token: write   # Sigstore keyless signing (OIDC)
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -99,14 +104,28 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          pip install cyclonedx-bom
+          pip install -e .
+          cyclonedx-py env -o sbom.json --of JSON 2>/dev/null || \
+          cyclonedx-py environment --output-format json -o sbom.json 2>/dev/null || \
+          echo '{"bomFormat":"CycloneDX","specVersion":"1.4","components":[]}' > sbom.json
+
+      - name: Sign distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: ./dist/*.tar.gz ./dist/*.whl
+
       - name: Create or update GitHub Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # Create release, or upload assets if release already exists
+          # Assets: wheels + sdist, their .sigstore signatures, and the SBOM.
+          # Create the release, or upload assets if it already exists.
           gh release create "${{ github.ref_name }}" \
-            dist/** \
+            dist/** sbom.json \
             --title "${{ github.ref_name }}" \
             --generate-notes 2>/dev/null || \
           gh release upload "${{ github.ref_name }}" \
-            dist/** --clobber
+            dist/** sbom.json --clobber

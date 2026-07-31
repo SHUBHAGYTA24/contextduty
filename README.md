@@ -8,6 +8,7 @@
 [![CI](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml/badge.svg)](https://github.com/SHUBHAGYTA24/contextduty/actions/workflows/ci.yml)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-purple.svg)](https://modelcontextprotocol.io)
 [![Tests](https://img.shields.io/badge/tests-407%20passing-brightgreen.svg)](#)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13902/badge)](https://www.bestpractices.dev/projects/13902)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13902/baseline)](https://www.bestpractices.dev/projects/13902)
 
 **Try it live:** [ContextDuty demo on Hugging Face Spaces](https://huggingface.co/spaces/shubhagyta-24/contextduty) · **Detection brain:** [Microsoft Presidio](https://github.com/microsoft/presidio)

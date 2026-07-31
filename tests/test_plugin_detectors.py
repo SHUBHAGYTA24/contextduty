@@ -28,7 +28,7 @@ def _clear_plugin_cache():
 def test_no_plugins_leaves_detectors_unchanged():
     # With nothing registered, get_all_detectors() is exactly the built-ins.
     assert get_all_detectors() == det.DETECTORS
-    assert det.load_plugin_detectors() == []
+    assert det.load_plugin_detectors() == ()
 
 
 class _FakeEntryPoint:

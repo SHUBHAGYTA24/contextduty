@@ -324,7 +324,9 @@ def test_addon_configure_applies_policy_and_audit(tmp_path, monkeypatch):
     """configure() must read the mitmproxy options and actually apply them."""
     from unittest.mock import MagicMock
 
-    from mitmproxy import ctx as mitm_ctx
+    import pytest
+
+    mitm_ctx = pytest.importorskip("mitmproxy.ctx")
 
     policy_file = tmp_path / "p.json"
     policy_file.write_text('{"mode": "block", "detectors": ["email"], "custom_detectors": {}}')

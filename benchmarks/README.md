@@ -116,3 +116,37 @@ A prompt scans in **~6–7 ms** (p99 ≈ 13 ms). Throughput scales with
 - **Latency is well within interactive budget** — a single prompt scans in a
   few milliseconds, so the firewall adds negligible delay to a prompt on its
   way to an AI tool, and throughput scales near-linearly with workers.
+
+## Reproducibility
+
+The corpus is **generated deterministically** from a fixed seed — there is no
+data file to download and nothing leaves your machine. Anyone can reproduce the
+exact numbers above:
+
+```bash
+pip install -e ".[presidio]"
+python -m spacy download en_core_web_sm
+python benchmarks/nlp_benchmark.py --rows 100000 --seed 1234 --json report.json
+```
+
+The same `--seed` produces the same prompts, spans, and labels on any machine,
+so results are comparable across runs and contributors. Latency will vary with
+hardware; **quality (precision/recall/F1) is hardware-independent**. The full
+generator, labelling, and scoring logic is in
+[`nlp_benchmark.py`](nlp_benchmark.py) — the ground-truth spans are recorded as
+each prompt is built, so recall is measured, not estimated.
+
+## Comparing against other tools
+
+This harness is intentionally tool-agnostic on the scoring side: it injects PII
+at known spans and checks what a scanner recovers. To compare ContextDuty
+against **gitleaks**, **TruffleHog**, or **detect-secrets** on the *same*
+corpus, dump the generated prompts to files, run each tool over them, and score
+their output against the emitted ground-truth labels (`--json` includes the
+per-prompt spans). We welcome PRs that add adapters for other scanners so the
+comparison is apples-to-apples on one public, reproducible corpus — a shared
+benchmark is more useful than competing marketing numbers.
+
+> Note: this benchmark measures the **NLP/PII** layer. The 60 regex secret
+> detectors are validated separately in `tests/test_detectors.py` (positive +
+> negative cases per detector).

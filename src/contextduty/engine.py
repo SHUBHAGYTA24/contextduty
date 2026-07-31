@@ -108,10 +108,14 @@ def _scan_line(line: str, detectors: Iterable[Detector]) -> list[Finding]:
     findings: list[Finding] = []
     for detector in detectors:
         for match in detector.pattern.finditer(line):
+            value = match.group(0)
+            # Checksum validators (Luhn, DEA, …) suppress shape-only matches.
+            if detector.validator is not None and not detector.validator(value):
+                continue
             findings.append(
                 Finding(
                     detector=detector.name,
-                    value=match.group(0),
+                    value=value,
                     start=match.start(),
                     end=match.end(),
                 )

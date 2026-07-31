@@ -114,29 +114,42 @@ _CASES: dict[str, tuple[list[str], list[str]]] = {
     "passport": (["passport: AB1234567"], ["AB1234567"]),
     # ── Healthcare ──────────────────────────────────────────────────────────
     "npi_number": (["NPI: 1234567890", "provider 1234567890 (NPI)"], ["1234567890"]),
-    "dea_number": (["AB1234567"], ["A1234567"]),
+    # AB1234563 has a valid DEA checksum; AB1234567 fits the shape but fails it.
+    "dea_number": (["AB1234563"], ["A1234567", "AB1234567"]),
     "icd10_code": (["ICD-10: E11.9", "icd10 J45"], ["E11.9"]),
     # ── Crypto / Web3 ─────────────────────────────────────────────────────────
-    "ethereum_private_key": (["0x" + _hex + _hex[:24]], ["0xshort"]),
+    # Must have an "eth/private key =" context; a bare 0x<64hex> no longer matches.
+    "ethereum_private_key": (
+        ["eth_private_key=0x" + "a" * 64, "private key: 0x" + "b" * 64],
+        ["0xshort", "0x" + "a" * 64],
+    ),
     "bitcoin_private_key_wif": (["5" + "K" * 51], ["5short"]),
     "mnemonic_phrase": (["abandon ability able about above absent zone"], ["just normal words"]),
 }
 
 
+def _fires(name: str, sample: str) -> bool:
+    """True if the detector produces a finding — pattern match that also passes
+    any checksum validator (Luhn, DEA)."""
+    d = DETECTOR_MAP[name]
+    for m in d.pattern.finditer(sample):
+        if d.validator is None or d.validator(m.group(0)):
+            return True
+    return False
+
+
 @pytest.mark.parametrize("name", sorted(_CASES))
 def test_detector_positive_samples(name):
-    pattern = DETECTOR_MAP[name].pattern
     positives, _ = _CASES[name]
     for sample in positives:
-        assert pattern.search(sample), f"{name} failed to match: {sample!r}"
+        assert _fires(name, sample), f"{name} failed to match: {sample!r}"
 
 
 @pytest.mark.parametrize("name", sorted(_CASES))
 def test_detector_negative_samples(name):
-    pattern = DETECTOR_MAP[name].pattern
     _, negatives = _CASES[name]
     for sample in negatives:
-        assert not pattern.search(sample), f"{name} false-positive on: {sample!r}"
+        assert not _fires(name, sample), f"{name} false-positive on: {sample!r}"
 
 
 def test_every_detector_is_covered():
@@ -174,3 +187,34 @@ def test_stable_mask_deterministic():
 
 def test_stable_mask_distinct_values():
     assert stable_mask("email", "a@b.com") != stable_mask("email", "x@y.com")
+
+
+# ---------------------------------------------------------------------------
+# Checksum validators (precision fixes)
+# ---------------------------------------------------------------------------
+
+
+def test_luhn_rejects_invalid_credit_card():
+    # Same shape as a Visa (starts with 4, 16 digits) but fails Luhn.
+    pat = DETECTOR_MAP["credit_card"].pattern
+    assert pat.search("4111111111111112")  # regex matches the shape
+    from contextduty.detectors import _luhn_valid
+
+    assert not _luhn_valid("4111111111111112")  # but Luhn rejects it
+    assert _luhn_valid("4111111111111111")
+
+
+def test_dea_checksum():
+    from contextduty.detectors import _dea_valid
+
+    assert _dea_valid("AB1234563")  # valid check digit
+    assert not _dea_valid("AB1234567")  # wrong check digit
+
+
+def test_engine_suppresses_luhn_invalid_card():
+    from contextduty.engine import scan_text
+    from contextduty.policy import Policy
+
+    p = Policy(mode="warn", detectors={"credit_card"}, custom_detectors={})
+    assert scan_text("card 4111111111111111", p).scan.findings_count == 1  # valid
+    assert scan_text("id 4111111111111112", p).scan.findings_count == 0  # invalid Luhn

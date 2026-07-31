@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 
 @dataclass(frozen=True)
@@ -23,10 +24,55 @@ class Detector:
 
     *name* identifies the finding type (e.g. ``"aws_key"``).
     *pattern* is a compiled regex applied line-by-line to source text.
+    *validator*, if set, is called with the matched text; when it returns
+    ``False`` the match is discarded. Used for checksum-verifiable formats
+    (e.g. Luhn for credit cards) to suppress false positives on ordinary
+    numbers that merely fit the shape.
     """
 
     name: str
     pattern: re.Pattern[str]
+    validator: Callable[[str], bool] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Checksum validators — applied after a regex match to cut false positives.
+# ---------------------------------------------------------------------------
+
+
+def _luhn_valid(value: str) -> bool:
+    """Return True if the digits in *value* pass the Luhn checksum (credit cards)."""
+    digits = [int(c) for c in value if c.isdigit()]
+    if len(digits) < 13:
+        return False
+    total = 0
+    parity = len(digits) % 2
+    for i, d in enumerate(digits):
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def _dea_valid(value: str) -> bool:
+    """Return True if *value* is a checksum-valid US DEA registration number.
+
+    Format: two letters + seven digits; the 7th digit is a check digit equal to
+    ``((d1+d3+d5) + 2*(d2+d4+d6)) mod 10``.
+    """
+    nums = [int(c) for c in value if c.isdigit()]
+    if len(nums) != 7:
+        return False
+    check = (nums[0] + nums[2] + nums[4]) + 2 * (nums[1] + nums[3] + nums[5])
+    return check % 10 == nums[6]
+
+
+_VALIDATORS: dict[str, Callable[[str], bool]] = {
+    "credit_card": _luhn_valid,
+    "dea_number": _dea_valid,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -204,10 +250,11 @@ _PATTERNS: list[tuple[str, str, int]] = [
         0,
     ),
     # ── Crypto / Web3 ───────────────────────────────────────────────────────
+    # ethereum_private_key: require an "eth/private key =" context. The bare
+    # 0x<64 hex> form was dropped — it fired on ordinary 32-byte hashes.
     (
         "ethereum_private_key",
-        r"(?i)(?:eth|ethereum|private)[_\-\s]?key\s*[=:]\s*['\"]?(0x[a-f0-9]{64})['\"]?"
-        r"|\b0x[a-fA-F0-9]{64}\b",
+        r"(?i)(?:eth|ethereum|private)[_\-\s]?key\s*[=:]\s*['\"]?(0x[a-fA-F0-9]{64})['\"]?",
         0,
     ),
     ("bitcoin_private_key_wif", r"\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\b", 0),
@@ -221,7 +268,8 @@ _PATTERNS: list[tuple[str, str, int]] = [
 
 
 DETECTORS: list[Detector] = [
-    Detector(name=name, pattern=re.compile(pattern, flags)) for name, pattern, flags in _PATTERNS
+    Detector(name=name, pattern=re.compile(pattern, flags), validator=_VALIDATORS.get(name))
+    for name, pattern, flags in _PATTERNS
 ]
 
 
